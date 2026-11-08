@@ -1,0 +1,68 @@
+.tabs {
+    background: var(--surface);
+    padding-block: 12px;
+}
+
+.tabs-grid {
+    display: flex;
+    gap: 8px;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px;
+    transition: all 0.25s ease-in-out;
+}
+
+.tab svg {
+    fill: var(--muted);
+}
+
+.tab.active {
+    background: var(--pill-bg-strong);
+    color: var(--accent-deep);
+}
+
+.tab.active svg {
+    fill: var(--accent-deep);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.logs-layout {
+    display: flex;
+    justify-content: space-between;
+    align-items: top;
+    gap: 20px;
+}
+
+.logs-table-card,
+.log-detail-card {
+    background: var(--surface);
+    padding: 24px;
+    border-radius: 16px;
+}
+
+.logs-table-header,
+.log-detail-header h3 {
+    font-weight: 900;
+    font-size: 20px;
+    margin-bottom: 20px;
+}

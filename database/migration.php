@@ -147,19 +147,25 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS activity_logs (
-        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        user_id     BIGINT UNSIGNED NULL,
-        action      VARCHAR(100) NOT NULL,
-        target_type VARCHAR(50) NULL,
-        target_id   BIGINT UNSIGNED NULL,
-        ip          VARCHAR(45) NULL,
-        user_agent  VARCHAR(255) NULL,
-        data        JSON NULL,
-        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-        INDEX (user_id, created_at),
-        INDEX (action, created_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         BIGINT UNSIGNED NULL,                    -- кто совершил действие
+    action          VARCHAR(100) NOT NULL,                   -- например: assign_complaint, change_access
+    result          ENUM('success', 'denied', 'error') NOT NULL DEFAULT 'success',
+    target_type     VARCHAR(50) NULL,                        -- complaint, report, user, category...
+    target_id       BIGINT UNSIGNED NULL,
+    object_title    VARCHAR(255) NULL,                        -- Жалоба C-104, Команда форума
+    ip              VARCHAR(45) NULL,
+    user_agent      VARCHAR(255) NULL,
+    data            JSON NULL,                               -- before / after / extra
+    comment         TEXT NULL,                               -- Передано на проверку
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX (user_id, created_at),
+    INDEX (action, created_at),
+    INDEX (result, created_at),
+    INDEX (target_type, target_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS reports (
         id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
