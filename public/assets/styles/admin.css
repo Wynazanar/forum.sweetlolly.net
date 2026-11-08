@@ -1,17 +1,27 @@
 .tabs {
     background: var(--surface);
     padding-block: 12px;
+    overflow: hidden;
 }
 
 .tabs-grid {
     display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
+    width: 100%;
+    max-width: 1440px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    margin: 0 auto;
 }
 
 .tab {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex: 0 0 auto;
+    white-space: nowrap;
     font-size: 14px;
     color: var(--muted);
     font-weight: 600;
@@ -58,6 +68,11 @@
     background: var(--surface);
     padding: 24px;
     border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.log-detail-card {
+    max-width: 240px;
 }
 
 .logs-table-header,

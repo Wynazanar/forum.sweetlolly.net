@@ -61,4 +61,28 @@ class User extends Model
 
         return (bool) $row;
     }
+
+    /**
+     * Пользователь + роль + permissions
+     */
+    public function findWithRole(int $id): ?array
+    {
+        $user = $this->findOne(
+            "SELECT 
+                u.*,
+                r.name AS role_name,
+                r.permissions
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE u.id = ?
+            LIMIT 1",
+            [$id]
+        );
+
+        if ($user && is_string($user['permissions'])) {
+            $user['permissions'] = json_decode($user['permissions'], true) ?: [];
+        }
+
+        return $user;
+    }
 }

@@ -3,7 +3,7 @@ namespace App\Models;
 
 use Core\Model;
 
-class Log extends Model
+class ActivityLog extends Model
 {
     /**
      * Список логов с пагинацией

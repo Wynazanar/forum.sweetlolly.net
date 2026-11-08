@@ -16,52 +16,12 @@
                 <?php if (empty($logs)): ?>
                     <p class="empty-state">Логов пока нет</p>
                 <?php else: ?>
-                    <div class="table-wrapper">
-                        <table class="logs-table">
-                            <thead>
-                                <tr>
-                                    <th>Время</th>
-                                    <th>Администратор</th>
-                                    <th>Событие</th>
-                                    <th>Объект</th>
-                                    <th>Результат</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($logs as $log): ?>
-                                    <?php
-                                        $isActive = !empty($selectedLog) && (int)$selectedLog['id'] === (int)$log['id'];
-                                        $time = date('H:i:s', strtotime($log['created_at']));
-
-                                        $result = $log['result'] ?? 'success';
-                                        $resultClass = match ($result) {
-                                            'success' => 'badge-success',
-                                            'denied'  => 'badge-danger',
-                                            'error'   => 'badge-warning',
-                                            default   => 'badge-success',
-                                        };
-                                        $resultText = match ($result) {
-                                            'success' => 'Успешно',
-                                            'denied'  => 'Отказано',
-                                            'error'   => 'Ошибка',
-                                            default   => 'Успешно',
-                                        };
-                                    ?>
-                                    <tr class="<?= $isActive ? 'is-active' : '' ?>">
-                                        <td><?= $time ?></td>
-                                        <td><?= htmlspecialchars($log['admin_name'] ?? '—') ?></td>
-                                        <td><?= htmlspecialchars($log['action']) ?></td>
-                                        <td><?= htmlspecialchars($log['object_title'] ?? $log['target_type'] ?? '—') ?></td>
-                                        <td><span class="badge <?= $resultClass ?>"><?= $resultText ?></span></td>
-                                        <td>
-                                            <a href="<?= url("/moderation/logs?id=".(int)$log['id']."&page=".(int)($logsPage ?? 1)) ?>" class="btn-icon">···</a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                    <?= \App\Components\AuditTable::make(
+                        $logs ?? [],
+                        $selectedLog ?? null,
+                        '/moderation/logs',
+                        (int)($logsPage ?? 1)
+                    ) ?>
 
                     <?php if (($logsPages ?? 1) > 1): ?>
                         <div class="pagination">

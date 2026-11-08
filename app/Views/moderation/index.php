@@ -1,144 +1,75 @@
 <?php
-// Определяем текущий таб (из URL или GET)
-$currentTab = $currentTab ?? 'overview'; // передавай из контроллера
+/** @var array  $tabs */
+/** @var string $currentTab */
 
-// Иконка (можно вынести в отдельный хелпер или просто копировать)
+// Иконки
 $icons = [
     'overview' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="M20 11h-6c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-8c0-.55-.45-1-1-1m-1 8h-4v-6h4zm-9-4H4c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-4c0-.55-.45-1-1-1m-1 4H5v-2h4zM20 3h-6c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1m-1 4h-4V5h4zm-9-4H4c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1m-1 8H5V5h4z"></path>
 </svg>
-
 SVG,
-
     'players' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
     <path d="M10 13H8c-2.76 0-5 2.24-5 5v1c0 .55.45 1 1 1h10c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5m-5 5c0-1.65 1.35-3 3-3h2c1.65 0 3 1.35 3 3zm7.73-11.49c-.08-.22-.19-.42-.3-.62v-.01c-.69-1.14-1.93-1.89-3.42-1.89-2.28 0-4 1.72-4 4s1.72 4 4 4c1.49 0 2.73-.74 3.42-1.89v-.01c.12-.2.22-.4.3-.62.02-.06.03-.12.05-.18.06-.17.11-.34.15-.52.05-.25.07-.51.07-.78s-.03-.53-.07-.78c-.03-.18-.09-.35-.15-.52-.02-.06-.03-.12-.05-.18M9 10c-1.18 0-2-.82-2-2s.82-2 2-2 2 .82 2 2-.82 2-2 2m6 0q-.165 0-.33-.03c-.22.66-.56 1.27-.98 1.81.41.13.84.22 1.31.22 2.28 0 4-1.72 4-4s-1.72-4-4-4c-.47 0-.9.09-1.31.22.43.53.76 1.14.98 1.81.11-.01.21-.03.33-.03 1.18 0 2 .82 2 2s-.82 2-2 2m1 3h-1.11c.6.58 1.08 1.27 1.44 2.03C17.83 15.2 19 16.46 19 18h-2v1c0 .35-.07.69-.18 1H20c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5"></path>
 </svg>
 SVG,
-
     'complaints' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
     <path d="m20.42 6.11-7.97-4c-.28-.14-.62-.14-.9 0l-7.97 4c-.31.15-.51.45-.55.79-.01.11-.96 10.76 8.55 15.01a.98.98 0 0 0 .82 0C21.91 17.66 20.97 7 20.95 6.9a.98.98 0 0 0-.55-.79ZM12 19.9C5.26 16.63 4.94 9.64 5 7.64l7-3.51 7 3.51c.04 1.99-.33 9.02-7 12.26"></path><path d="M11 7h2v6h-2zm0 8h2v2h-2z"></path>
 </svg>
 SVG,
-
     'reports' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
     <path d="M5 15.64c2-.87 4.28-.76 6.18.33 1.37.78 2.89 1.18 4.42 1.18 1.12 0 2.24-.21 3.32-.64l1.45-.58A1 1 0 0 0 21 15V4a1 1 0 0 0-1.37-.93l-1.45.58c-1.97.79-4.16.63-6-.42A8.9 8.9 0 0 0 3.77 3l-.21.1a1 1 0 0 0-.55.89v18h2v-6.36ZM5 4.63c2-.87 4.28-.75 6.18.34 2.37 1.36 5.19 1.55 7.74.54l.08-.03v8.85l-.82.33a6.85 6.85 0 0 1-6-.42 8.95 8.95 0 0 0-4.42-1.18c-.93 0-1.86.15-2.75.44V4.63Z"></path>
 </svg>
 SVG,
-
     'applications' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="M7 10h10v2H7zm0 4h7v2H7z"></path><path d="M19 3h-2c0-.55-.45-1-1-1H8c-.55 0-1 .45-1 1H5c-1.1 0-2 .9-2 2v15c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m0 17H5V5h2v2h10V5h2z"></path>
 </svg>
 SVG,
-
     'sections' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="M20 4h-8.59L10 2.59C9.62 2.21 9.12 2 8.59 2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2m0 14H4V6h16z"></path>
 </svg>
 SVG,
-
     'topics' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="m19.94 7.68-.03-.09a.8.8 0 0 0-.2-.29l-5-5c-.09-.09-.19-.15-.29-.2l-.09-.03a.8.8 0 0 0-.26-.05c-.02 0-.04-.01-.06-.01H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-12s-.01-.04-.01-.06c0-.09-.02-.17-.05-.26ZM6 20V4h7v4c0 .55.45 1 1 1h4v11z"></path><path d="M8 11h8v2H8zm0 4h8v2H8zm0-8h3v2H8z"></path>
 </svg>
 SVG,
-
     'discussions' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="M18 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6"></path><path d="M19.87 10.63c.08.45.13.9.13 1.37 0 4.41-3.59 8-8 8H4.91L6 18.43c.26-.37.23-.88-.06-1.22A7.98 7.98 0 0 1 4.01 12c0-4.41 3.59-8 8-8 .47 0 .92.05 1.37.13.28-.68.7-1.28 1.23-1.77-.83-.22-1.7-.36-2.6-.36C6.49 2 2 6.49 2 12c0 2.12.68 4.19 1.93 5.9l-1.75 2.53c-.21.31-.24.7-.06 1.03.17.33.51.54.89.54h9c5.51 0 10-4.49 10-10 0-.9-.13-1.77-.36-2.6-.49.53-1.09.95-1.77 1.23Z"></path>
 </svg>
 SVG,
-
     'logs' => <<<SVG
-<svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
-fill="currentColor" viewBox="0 0 24 24" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
 <path d="M21.21 8.11c-.25-.59-.56-1.16-.92-1.7-.36-.53-.77-1.03-1.22-1.48s-.95-.86-1.48-1.22c-.54-.36-1.11-.67-1.7-.92-.6-.26-1.24-.45-1.88-.58-1.31-.27-2.72-.27-4.03 0-.64.13-1.27.33-1.88.58-.59.25-1.16.56-1.7.92-.53.36-1.03.77-1.48 1.22-.17.17-.32.35-.48.52L1.99 3v6h6L5.86 6.87c.15-.18.31-.36.48-.52.36-.36.76-.69 1.18-.98.43-.29.89-.54 1.36-.74.48-.2.99-.36 1.5-.47 1.05-.21 2.18-.21 3.23 0 .51.11 1.02.26 1.5.47.47.2.93.45 1.36.74.42.29.82.62 1.18.98s.69.76.98 1.18c.29.43.54.89.74 1.36.2.48.36.99.47 1.5.11.53.16 1.07.16 1.61a7.85 7.85 0 0 1-.63 3.11c-.2.47-.45.93-.74 1.36-.29.42-.62.82-.98 1.18s-.76.69-1.18.98c-.43.29-.89.54-1.36.74-.48.2-.99.36-1.5.47-1.05.21-2.18.21-3.23 0a8 8 0 0 1-1.5-.47c-.47-.2-.93-.45-1.36-.74-.42-.29-.82-.62-1.18-.98s-.69-.76-.98-1.18c-.29-.43-.54-.89-.74-1.36-.2-.48-.36-.99-.47-1.5A8 8 0 0 1 3.99 12h-2c0 .68.07 1.35.2 2.01.13.64.33 1.27.58 1.88.25.59.56 1.16.92 1.7.36.53.77 1.03 1.22 1.48s.95.86 1.48 1.22c.54.36 1.11.67 1.7.92.6.26 1.24.45 1.88.58.66.13 1.33.2 2.01.2s1.36-.07 2.01-.2c.64-.13 1.27-.33 1.88-.58.59-.25 1.16-.56 1.7-.92.53-.36 1.03-.77 1.48-1.22s.86-.95 1.22-1.48c.36-.54.67-1.11.92-1.7.26-.6.45-1.24.58-1.88.13-.66.2-1.34.2-2.01s-.07-1.35-.2-2.01c-.13-.64-.33-1.27-.58-1.88Z"></path><path d="M11 7v6h6v-2h-4V7z"></path>
 </svg>
 SVG,
 ];
 
-$tabs = [
-    [
-        'id'    => 'overview',
-        'title' => 'Обзор',
-        'icon'  => $icons['overview'],
-        'href'  => url('/moderation/overview'),
-    ],
-    [
-        'id'    => 'players',
-        'title' => 'Игроки',
-        'icon'  => $icons['players'],
-        'href'  => url('/moderation/players'),
-    ],
-    [
-        'id'    => 'complaints',
-        'title' => 'Жалобы',
-        'icon'  => $icons['complaints'],
-        'href'  => url('/moderation/complaints'),
-    ],
-    [
-        'id'    => 'reports',
-        'title' => 'Репорты',
-        'icon'  => $icons['reports'],
-        'href'  => url('/moderation/reports'),
-    ],
-    [
-        'id'    => 'applications',
-        'title' => 'Заявки',
-        'icon'  => $icons['applications'],
-        'href'  => url('/moderation/applications'),
-    ],
-    [
-        'id'    => 'sections',
-        'title' => 'Разделы',
-        'icon'  => $icons['sections'],
-        'href'  => url('/moderation/sections'),
-    ],
-    [
-        'id'    => 'topics',
-        'title' => 'Темы',
-        'icon'  => $icons['topics'],
-        'href'  => url('/moderation/topics'),
-    ],
-    [
-        'id'    => 'discussions',
-        'title' => 'Обсуждения',
-        'icon'  => $icons['discussions'],
-        'href'  => url('/moderation/discussions'),
-    ],
-    [
-        'id'    => 'logs',
-        'title' => 'Логи',
-        'icon'  => $icons['logs'],
-        'href'  => url('/moderation/logs'),
-    ],
-];
+// Добавляем иконки к табам, которые пришли из контроллера
+foreach ($tabs as &$tab) {
+    $tab['icon'] = $icons[$tab['id']] ?? '';
+}
+unset($tab);
 ?>
 
 <link rel="stylesheet" href="<?= asset('styles/admin.css') ?>">
-
 
 <?= \App\Components\Tabs::make($tabs, $currentTab) ?>
 
 <div class="tab-content">
     <?php
-    // Подключаем контент нужного таба
     $tabFile = __DIR__ . '/' . $currentTab . '.php';
 
     if (file_exists($tabFile)) {
         require $tabFile;
     } else {
-        echo '<p>Раздел не найден</p>';
+        echo "<div class='container'><p>Раздел не найден</p></div>";
     }
     ?>
 </div>
