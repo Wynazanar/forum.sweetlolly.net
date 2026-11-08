@@ -1,437 +1,639 @@
 <?php
-require_once __DIR__ . '/../project/config/connection.php';
+
+/**
+ * Миграция + сидер БД форума.
+ * Запуск: php database/migration.php
+ * или через браузер: /database/migration.php
+ *
+ * Создаёт все таблицы и заполняет тестовыми данными.
+ */
+
+$basePath = dirname(__DIR__);
+
+require $basePath . '/vendor/autoload.php';
+
+// .env
+$dotenv = Dotenv\Dotenv::createImmutable($basePath);
+$dotenv->safeLoad();
+
+// Конфиг БД → константы
+$db = require $basePath . '/app/Config/database.php';
+if (!defined('DB_HOST')) define('DB_HOST', $db['host']);
+if (!defined('DB_USER')) define('DB_USER', $db['username']);
+if (!defined('DB_PASS')) define('DB_PASS', $db['password']);
+if (!defined('DB_NAME')) define('DB_NAME', $db['database']);
 
 if (!function_exists('db')) {
     require_once __DIR__ . '/app/db.php';
 }
+
 try {
-    $server = new PDO('mysql:host=' . DB_HOST . ';charset=utf8mb4', DB_USER, DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $server->exec('CREATE DATABASE IF NOT EXISTS `' . DB_NAME . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+    // Подключаемся без указания базы
+    $server = new PDO(
+        'mysql:host=' . DB_HOST . ';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]
+    );
+
+    $dbName = str_replace('`', '``', DB_NAME);
+    $server->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
     require_once __DIR__ . '/app/db.php';
+    $pdo = db();
+
+    // =====================================================
+    // СОЗДАНИЕ ТАБЛИЦ
+    // =====================================================
+
     $sql = [];
-    
-    $sql[] = "CREATE TABLE IF NOT EXISTS site_notifications(
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            player_name VARCHAR(16) NOT NULL,
-                                            event_type VARCHAR(32) NOT NULL,
-                                            payload JSON NOT NULL,
-                                            is_read TINYINT(1) NOT NULL DEFAULT 0,
-                                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                            KEY idx_player_read (player_name, is_read)
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS prefixes(
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            name VARCHAR(100) NOT NULL,
-                                            description VARCHAR(250),
-                                            category VARCHAR(100) NOT NULL,
-                                            _character VARCHAR(250),
-                                            what_does TEXT,
-                                            tasks JSON
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS roles (
+        id          TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name        VARCHAR(75) NOT NULL UNIQUE,
+        permissions JSON NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS minigames_categories(
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            name VARCHAR(150) NOT NULL
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS users (
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        username        VARCHAR(100) NOT NULL UNIQUE,
+        email           VARCHAR(255) NOT NULL UNIQUE,
+        password_hash   VARCHAR(255) NOT NULL,
+        avatar          VARCHAR(255) NULL,
+        role_id         TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        posts_count     INT UNSIGNED NOT NULL DEFAULT 0,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_seen       TIMESTAMP NULL,
+        is_banned       TINYINT(1) NOT NULL DEFAULT 0,
+        ban_reason      VARCHAR(255) NULL,
+        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS minigames (
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            name VARCHAR(150) NOT NULL,
-                                            seo_text VARCHAR(200) NOT NULL,
-                                            card_text VARCHAR(200) NOT NULL,
-                                            description TEXT NOT NULL,
-                                            category_id INT NOT NULL,
-                                            tags JSON NOT NULL,
-                                            peculiarities JSON NOT NULL,
-                                            advice JSON NOT NULL,
-                                            similar JSON NOT NULL,
-                                            path_image VARCHAR(500) DEFAULT NULL,
-                                            gallery_path JSON DEFAULT NULL,
-                                            INDEX idx_category (category_id),
-                                            FOREIGN KEY (category_id) REFERENCES minigames_categories(id) ON DELETE CASCADE
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS categories (
+        id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        parent_id   INT UNSIGNED NULL,
+        title       VARCHAR(150) NOT NULL,
+        description TEXT NULL,
+        position    SMALLINT NOT NULL DEFAULT 0,
+        is_locked   TINYINT(1) NOT NULL DEFAULT 0,
+        FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS rules_categories (
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            name VARCHAR(250) NOT NULL
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS threads (
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        category_id     INT UNSIGNED NOT NULL,
+        user_id         BIGINT UNSIGNED NOT NULL,
+        title           VARCHAR(255) NOT NULL,
+        slug            VARCHAR(255) NOT NULL,
+        is_sticky       TINYINT(1) NOT NULL DEFAULT 0,
+        is_locked       TINYINT(1) NOT NULL DEFAULT 0,
+        views           INT UNSIGNED NOT NULL DEFAULT 0,
+        posts_count     INT UNSIGNED NOT NULL DEFAULT 1,
+        last_post_id    BIGINT UNSIGNED NULL,
+        last_post_at    TIMESTAMP NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (category_id, is_sticky, last_post_at),
+        INDEX (user_id),
+        INDEX (slug)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS rules (
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            title VARCHAR(350) NOT NULL,
-                                            rule TEXT NOT NULL,
-                                            category_id INT NOT NULL,
-                                            punishments JSON DEFAULT NULL,
-                                            INDEX idx_category (category_id),
-                                            FOREIGN KEY (category_id) REFERENCES rules_categories(id) ON DELETE CASCADE
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS posts (
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        thread_id       BIGINT UNSIGNED NOT NULL,
+        user_id         BIGINT UNSIGNED NOT NULL,
+        reply_to_post_id BIGINT UNSIGNED NULL,
+        content         MEDIUMTEXT NOT NULL,
+        content_html    MEDIUMTEXT NULL,
+        is_first        TINYINT(1) NOT NULL DEFAULT 0,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NULL,
+        edited_by       BIGINT UNSIGNED NULL,
+        FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (reply_to_post_id) REFERENCES posts(id) ON DELETE SET NULL,
+        FOREIGN KEY (edited_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX (thread_id, created_at),
+        INDEX (user_id),
+        INDEX (reply_to_post_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS subs(
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            name VARCHAR(350) NOT NULL,
-                                            priceMonth DECIMAL(7,2) NOT NULL,
-                                            priceAlways DECIMAL(7,2) NOT NULL,
-                                            discount INT DEFAULT 0,
-                                            path_image VARCHAR(500) NOT NULL
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS reactions (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        post_id     BIGINT UNSIGNED NOT NULL,
+        user_id     BIGINT UNSIGNED NOT NULL,
+        type        VARCHAR(30) NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_reaction (post_id, user_id, type),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    $sql[] = "CREATE TABLE IF NOT EXISTS site_notifications (
-                                            id INT AUTO_INCREMENT PRIMARY KEY,
-                                            player_name VARCHAR(32) NOT NULL,
-                                            event_type VARCHAR(64) NOT NULL,
-                                            payload JSON NULL,
-                                            is_read TINYINT(1) NOT NULL DEFAULT 0,
-                                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                            INDEX idx_player_read (player_name, is_read),
-                                            INDEX idx_player_id (player_name, id)
-                                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $sql[] = "CREATE TABLE IF NOT EXISTS notifications (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id     BIGINT UNSIGNED NOT NULL,
+        type        VARCHAR(50) NOT NULL,
+        data        JSON NOT NULL,
+        is_read     TINYINT(1) NOT NULL DEFAULT 0,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (user_id, is_read, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
+    $sql[] = "CREATE TABLE IF NOT EXISTS activity_logs (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id     BIGINT UNSIGNED NULL,
+        action      VARCHAR(100) NOT NULL,
+        target_type VARCHAR(50) NULL,
+        target_id   BIGINT UNSIGNED NULL,
+        ip          VARCHAR(45) NULL,
+        user_agent  VARCHAR(255) NULL,
+        data        JSON NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX (user_id, created_at),
+        INDEX (action, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
+    $sql[] = "CREATE TABLE IF NOT EXISTS reports (
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        reporter_id     BIGINT UNSIGNED NOT NULL,
+        target_type     ENUM('post', 'thread', 'user') NOT NULL,
+        target_id       BIGINT UNSIGNED NOT NULL,
+        reason          VARCHAR(255) NOT NULL,
+        description     TEXT NULL,
+        status          ENUM('pending', 'resolved', 'rejected') NOT NULL DEFAULT 'pending',
+        resolved_by     BIGINT UNSIGNED NULL,
+        resolved_at     TIMESTAMP NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX (status, created_at),
+        INDEX (target_type, target_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    foreach ($sql as $q)
-        db()->exec($q);
-    
+    $sql[] = "CREATE TABLE IF NOT EXISTS bans (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id     BIGINT UNSIGNED NOT NULL,
+        banned_by   BIGINT UNSIGNED NULL,
+        reason      VARCHAR(255) NOT NULL,
+        expires_at  TIMESTAMP NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (banned_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX (user_id, is_active),
+        INDEX (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-    try {
-        $catCount = db()->query('SELECT COUNT(*) as c FROM minigames_categories')->fetch()['c'] ?? 0;
+    $sql[] = "CREATE TABLE IF NOT EXISTS attachments (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        post_id     BIGINT UNSIGNED NULL,
+        user_id     BIGINT UNSIGNED NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        stored_name VARCHAR(255) NOT NULL,
+        path        VARCHAR(500) NOT NULL,
+        size        INT UNSIGNED NOT NULL,
+        mime_type   VARCHAR(100) NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (post_id),
+        INDEX (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-        if ($catCount == 0) {
-            $categories = [
-                ['name' => 'PvP'],
-                ['name' => 'Выживание'],
-                ['name' => 'Аркады'],
-                ['name' => 'Экономика'],
-                ['name' => 'Креатив'],
-            ];
+    $sql[] = "CREATE TABLE IF NOT EXISTS thread_reads (
+        user_id         BIGINT UNSIGNED NOT NULL,
+        thread_id       BIGINT UNSIGNED NOT NULL,
+        last_read_post_id BIGINT UNSIGNED NULL,
+        last_read_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, thread_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-            $stmt = db()->prepare('INSERT INTO minigames_categories (name) VALUES (?)');
-            foreach ($categories as $cat) {
-                $stmt->execute([$cat['name']]);
-            }
+    $sql[] = "CREATE TABLE IF NOT EXISTS thread_subscriptions (
+        user_id     BIGINT UNSIGNED NOT NULL,
+        thread_id   BIGINT UNSIGNED NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, thread_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-            echo "<p>✅ Добавлено " . count($categories) . " категорий мини-игр.</p>";
+    $sql[] = "CREATE TABLE IF NOT EXISTS friendships (
+        id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id     BIGINT UNSIGNED NOT NULL,
+        friend_id   BIGINT UNSIGNED NOT NULL,
+        status      ENUM('pending', 'accepted', 'rejected', 'blocked') NOT NULL DEFAULT 'pending',
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP NULL,
+        UNIQUE KEY unique_friendship (user_id, friend_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (friend_id, status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-            $gameCount = db()->query('SELECT COUNT(*) as c FROM minigames')->fetch()['c'] ?? 0;
+    $sql[] = "CREATE TABLE IF NOT EXISTS private_messages (
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        sender_id       BIGINT UNSIGNED NOT NULL,
+        recipient_id    BIGINT UNSIGNED NOT NULL,
+        content         MEDIUMTEXT NOT NULL,
+        is_read         TINYINT(1) NOT NULL DEFAULT 0,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (recipient_id, is_read, created_at),
+        INDEX (sender_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
-            if ($gameCount == 0) {
-                $catMap = db()->query('SELECT name, id FROM minigames_categories')->fetchAll(PDO::FETCH_KEY_PAIR);
-
-                $minigamesData = [
-                    [
-                        'name' => 'Prison',
-                        'seo_text' => 'Копай шахты, продавай ресурсы, улучшай ранг и прокачивайся до топа.',
-                        'card_text' => 'Космические шахты, ранги и экономика ресурсов.',
-                        'description' => 'Копай шахты, продавай ресурсы, улучшай ранг и прокачивайся до топа. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Экономика'] ?? 1,
-                        'tags' => json_encode(['Шахты', 'Экономика', 'Прокачка']),
-                        'peculiarities' => json_encode(['Шахты с разными ресурсами и прогрессией.', 'Экономика, продажа ресурсов и развитие баланса.', 'Ранги, цели и понятный путь развития.', 'Подходит для спокойной игры и долгих сессий.']),
-                        'advice' => json_encode(['Начинай с базовых шахт и не пропускай улучшения.', 'Следи за ценой ресурсов и не носи всё ценное с собой.', 'Сохраняй прогресс и задавай вопросы на форуме.']),
-                        'similar' => json_encode(['SkyBlock', 'OneBlock']),
-                        'path_image' => 'prison.png',
-                        'gallery_path' => json_encode(['prison.png'])
-                    ],
-                    [
-                        'name' => 'SkyBlock',
-                        'seo_text' => 'Остров, фермы, развитие базы и уютная выживалка в небе.',
-                        'card_text' => 'Острова, фермы, спокойное развитие и собственные правила.',
-                        'description' => 'Остров, фермы, развитие базы и уютная выживалка в небе. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Выживание'] ?? 1,
-                        'tags' => json_encode(['Остров', 'Фермы', 'Выживание']),
-                        'peculiarities' => json_encode(['Собственный остров и постепенное развитие.', 'Фермы, ресурсы, торговля и задания.', 'Можно играть одному или с друзьями.', 'Хороший режим для креативного строительства.']),
-                        'advice' => json_encode(['Сначала сделай безопасную платформу и генератор.', 'Развивай фермы постепенно, чтобы не создавать лаги.', 'Украшай остров — красивый остров приятно развивать.']),
-                        'similar' => json_encode(['Prison', 'OneBlock']),
-                        'path_image' => 'skyblock.png',
-                        'gallery_path' => json_encode(['skyblock.png'])
-                    ],
-                    [
-                        'name' => 'OneBlock',
-                        'seo_text' => 'Один блок, много этапов и постоянное развитие из минимального старта.',
-                        'card_text' => 'Один начальный блок, этапы и развитие с нуля.',
-                        'description' => 'Один блок, много этапов и постоянное развитие из минимального старта. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Выживание'] ?? 1,
-                        'tags' => json_encode(['Этапы', 'Испытание', 'Остров']),
-                        'peculiarities' => json_encode(['Старт с одного блока и постепенное расширение.', 'Разные фазы ресурсов и мобов.', 'Челлендж для аккуратной и внимательной игры.', ' Подходит для игроков, любящих прогресс.']),
-                        'advice' => json_encode(['Не стой вплотную к краю острова.', 'Сразу делай место для сундуков и мобов.', 'Расширяй платформу до сложных фаз.']),
-                        'similar' => json_encode(['Prison', 'SkyBlock']),
-                        'path_image' => 'oneblock.png',
-                        'gallery_path' => json_encode(['oneblock.png'])
-                    ],
-                    [
-                        'name' => 'BedWars',
-                        'seo_text' => 'Командный PvP: защищай кровать, собирай ресурсы и уничтожай базы соперников.',
-                        'card_text' => 'Защищай кровать и ломай базы соперников.',
-                        'description' => 'Командный PvP: защищай кровать, собирай ресурсы и уничтожай базы соперников. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',                        'category_id' => $catMap['PvP'] ?? 1,
-                        'tags' => json_encode(['PvP', 'Команды', 'Быстрые матчи']),
-                        'peculiarities' => json_encode(['Командные матчи и понятная цель.', 'Улучшения, ресурсы и оборона базы.', 'Динамичные атаки и защита кровати.', 'Подходит для игры с друзьями.']),
-                        'advice' => json_encode(['Не оставляй кровать без защиты.', 'Покупай улучшения команды, а не только личные вещи.', 'Следи за мостами и быстрыми атаками.']),
-                        'similar' => json_encode(['SkyWars']),
-                        'path_image' => 'bedwars.png',
-                        'gallery_path' => json_encode(['bedwars.png'])
-                    ],
-                    [
-                        'name' => 'SkyWars',
-                        'seo_text' => 'Быстрые сражения на островах: лутай сундуки, стройся к центру и побеждай.',
-                        'card_text' => 'Выживи и стань последним на своей арене.',
-                        'description' => 'Быстрые сражения на островах: лутай сундуки, стройся к центру и побеждай. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['PvP'] ?? 1,
-                        'tags' => json_encode(['PvP', 'Острова', 'Сундуки']),
-                        'peculiarities' => json_encode(['Короткие и напряжённые матчи.', 'Лут, острова и центральная зона.', 'Много тактики: раш, защита или контроль центра.', 'Отлично тренирует PvP и реакцию.']),
-                        'advice' => json_encode(['Быстро забирай стартовый лут.', 'Центр обычно даёт преимущество.', 'Следи за игроками, которые строятся к тебе.']),
-                        'similar' => json_encode(['BedWars']),
-                        'path_image' => 'skywars.png',
-                        'gallery_path' => json_encode(['skywars.png'])
-                    ],
-                    [
-                        'name' => 'Murder Mystery',
-                        'seo_text' => 'Детективная мини-игра: найди убийцу, выживи или сыграй свою роль идеально.',
-                        'card_text' => 'Роли, детектив, убийца и выживание.',
-                        'description' => 'Детективная мини-игра: найди убийцу, выживи или сыграй свою роль идеально. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Аркады'] ?? 1,
-                        'tags' => json_encode(['Детектив', 'Роли', 'Аркады']),
-                        'peculiarities' => json_encode(['Роли с разными задачами.', 'Атмосферные карты и быстрые раунды.', 'Нужно наблюдать, думать и не палиться.', 'Весело играть компанией.']),
-                        'advice' => json_encode(['Запоминай подозрительное поведение.', 'Не бегай по одиночке без причины.', 'Если ты убийца — не действуй слишком очевидно.']),
-                        'similar' => json_encode(['TNT Run', 'BuildBattle', 'BlockParty', 'Arcades']),
-                        'path_image' => 'murdermystery.png',
-                        'gallery_path' => json_encode(['murdermystery.png'])
-                    ],
-                    [
-                        'name' => 'TNT Run',
-                        'seo_text' => 'Беги по исчезающим блокам, не падай и останься последним на арене.',
-                        'card_text' => 'Беги, прыгай, выживай и не взорвись первым.',
-                        'description' => 'Беги по исчезающим блокам, не падай и останься последним на арене. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Аркады'] ?? 1,
-                        'tags' => json_encode(['Паркур', 'Аркады', 'Реакция']),
-                        'peculiarities' => json_encode(['Простые правила и быстрый старт.', 'Арены с исчезающими блоками.', 'Проверка реакции и маршрута.', 'Идеально для коротких сессий.']),
-                        'advice' => json_encode(['Не прыгай без необходимости.', 'Старайся резать карту экономно.', 'Держи дистанцию от толпы.']),
-                        'similar' => json_encode(['Murder Mystery', 'BuildBattle', 'BlockParty', 'Arcades']),
-                        'path_image' => 'tntrun.png',
-                        'gallery_path' => json_encode(['tntrun.png'])
-                    ],
-                    [
-                        'name' => 'BuildBattle',
-                        'seo_text' => 'Строй по теме, голосуй честно и показывай креатив.',
-                        'card_text' => 'Строй по теме и показывай свое воображение.',
-                        'description' => 'Строй по теме, голосуй честно и показывай креатив. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Креатив'] ?? 1,
-                        'tags' => json_encode(['Стройка', 'Креатив', 'Конкурс']),
-                        'peculiarities' => json_encode(['Темы для быстрого строительства.', 'Голосование игроков.', 'Развитие креатива и скорости.', 'Подходит для спокойной игры.']),
-                        'advice' => json_encode(['Сначала делай форму, потом детали.', 'Используй палитру из 3–5 цветов.', 'Голосуй честно — так режим интереснее.']),
-                        'similar' => json_encode(['TNT Run', 'Murder Mystery', 'BlockParty', 'Arcades']),
-                        'path_image' => 'buildbattle.png',
-                        'gallery_path' => json_encode(['buildbattle.png'])
-                    ],
-                    [
-                        'name' => 'BlockParty',
-                        'seo_text' => 'Музыкальная аркада: найди нужный цвет и успей встать на него.',
-                        'card_text' => 'Танцуй на блоках под музыку и останься в игре.',
-                        'description' => 'Музыкальная аркада: найди нужный цвет и успей встать на него. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Аркады'] ?? 1,
-                        'tags' => json_encode(['Музыка', 'Цвета', 'Реакция']),
-                        'peculiarities' => json_encode(['Быстрые раунды и простые правила.', 'Цветовые задания и темп.', 'Весёлый режим для компании.', 'Отлично подходит для отдыха.']),
-                        'advice' => json_encode(['Держи камеру так, чтобы видеть больше пола.', 'Учись быстро отличать похожие цвета.', 'Не стой у края площадки.']),
-                        'similar' => json_encode(['TNT Run', 'Murder Mystery', 'BuildBattle', 'Arcades']),
-                        'path_image' => 'blockparty.png',
-                        'gallery_path' => json_encode(['blockparty.png'])
-                    ],
-                    [
-                        'name' => 'Arcades',
-                        'seo_text' => 'Сборник лёгких мини-игр для быстрых матчей и отдыха между режимами.',
-                        'card_text' => 'Набор быстрых мини-игр в одном режиме.',
-                        'description' => 'Сборник лёгких мини-игр для быстрых матчей и отдыха между режимами. Этот раздел обновлён: теперь описание читается нормально, картинки не ломают вёрстку, а блоки одинаково хорошо выглядят на ПК и телефоне.',
-                        'category_id' => $catMap['Аркады'] ?? 1,
-                        'tags' => json_encode(['Мини-игры', 'Фан', 'Быстро']),
-                        'peculiarities' => json_encode(['Разные короткие активности.', 'Можно играть без долгой подготовки.', 'Подходит для новичков и компании.', 'Хороший выбор, когда хочется разнообразия.']),
-                        'advice' => json_encode(['Пробуй разные аркады, чтобы найти любимую.', 'Не бойся проигрывать — режим для фана.', 'Зови друзей, так веселее.']),
-                        'similar' => json_encode(['TNT Run', 'Murder Mystery', 'BuildBattle', 'BlockParty']),
-                        'path_image' => 'arcades.png',
-                        'gallery_path' => json_encode(['arcades.png'])
-                    ],
-
-                ];
-
-                $stmt = db()->prepare("INSERT INTO minigames 
-                    (name, seo_text, card_text, description, category_id, tags, peculiarities, advice, similar, path_image, gallery_path) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-
-                foreach ($minigamesData as $game) {
-                    $stmt->execute([
-                        $game['name'],
-                        $game['seo_text'],
-                        $game['card_text'],
-                        $game['description'],
-                        $game['category_id'],
-                        $game['tags'],
-                        $game['peculiarities'],
-                        $game['advice'],
-                        $game['similar'],
-                        $game['path_image'],
-                        $game['gallery_path']
-                    ]);
-                }
-                echo "<p>✅ Добавлено " . count($minigamesData) . " мини-игр.</p>";
-            }
-        }
-    } catch (Throwable $e) {
-        echo "<p style='color:orange'>⚠️ Ошибка сидирования мини-игр: " . htmlspecialchars($e->getMessage()) . "</p>";
+    foreach ($sql as $query) {
+        $pdo->exec($query);
     }
 
-    //RULES MIGRATION
-    try {
+    // =====================================================
+    // СИДЫ (тестовые данные)
+    // =====================================================
 
-        $ruleCategoriesCount = db()->query('SELECT COUNT(*) as c FROM rules_categories')->fetch()['c'] ?? 0;
-
-        if ($ruleCategoriesCount == 0) {
-            $ruleCategories = [
-                ['name' => 'Общие правила'],
-                ['name' => 'Аккаунт и безопасность'],
-                ['name' => 'Игровой процесс'],
-                ['name' => 'Экономика и обмены'],
-                ['name' => 'Постройки и территория'],
-                ['name' => 'Мини-игры и режимы'],
-                ['name' => 'Жалобы и обжалования'],
-            ];
-
-            $stmt = db()->prepare('INSERT INTO rules_categories (name) VALUES (?)');
-            foreach ($ruleCategories as $cat) {
-                $stmt->execute([$cat['name']]);
-            }
-
-            echo "<p>✅ Добавлено " . count($ruleCategories) . " категорий правил.</p>";
-
-            $ruleCount = db()->query('SELECT COUNT(*) as c FROM rules')->fetch()['c'] ?? 0;
-
-            if ($ruleCount == 0) {
-                $rulMap = db()->query('SELECT name, id FROM rules_categories')->fetchAll(PDO::FETCH_KEY_PAIR);
-
-                $rulesData = [
-                    [
-                        'title' => 'Уважайте игроков и администрацию',
-                        'rule' => 'Запрещены оскорбления, травля, провокации, угрозы, дискриминация и токсичное поведение в любом виде.',
-                        'category_id' => $rulMap['Общие правила'] ?? 1,
-                        'punishments' => json_encode(['Мут', 'Бан'])
-                    ],
-                    [
-                        'title' => 'Запрещён спам и флуд',
-                        'rule' => 'Не повторяйте одинаковые сообщения, не злоупотребляйте капсом, символами, рекламой и бессмысленными сообщениями.',
-                        'category_id' => $rulMap['Общие правила'] ?? 1,
-                        'punishments' => json_encode(['Предупреждение', 'Мут'])
-                    ],
-                    ['title' => 'Никакой рекламы', 'rule' => 'Запрещена реклама сторонних серверов, сайтов, Discord/VK-групп и любых проектов без разрешения администрации.', 'category_id' => $rulMap['Общие правила'] ?? 1, 'punishments' => json_encode(['Мут', 'Бан'])],
-                    ['title' => 'Не выдавайте себя за администрацию', 'rule' => 'Запрещены ники, скины, префиксы и сообщения, которые вводят игроков в заблуждение.', 'category_id' => $rulMap['Общие правила'] ?? 1, 'punishments' => json_encode(['Бан', 'Смена никнейма'])],
-                    ['title' => 'Администрация решает спорные ситуации', 'rule' => 'Если правило не описывает конкретный случай, администрация может принять решение по смыслу правил и интересам проекта.', 'category_id' => $rulMap['Общие правила'] ?? 1, 'punishments' => json_encode(['Индивидуально'])],
-                    ['title' => 'Отвечаете за свой аккаунт', 'rule' => 'Все действия с вашего аккаунта считаются вашими. Не передавайте пароль другим людям.', 'category_id' => $rulMap['Аккаунт и безопасность'] ?? 1, 'punishments' => json_encode(['Наказание аккаунтов'])],
-                    ['title' => 'Мультиаккаунты ограничены', 'rule' => 'Запрещено использовать дополнительные аккаунты для обхода наказаний, фарма, голосований, конкурсов или преимуществ.', 'category_id' => $rulMap['Аккаунт и безопасность'] ?? 1, 'punishments' => json_encode(['Бан твинка', 'Бан основны'])],
-                    ['title' => 'Запрещена продажа аккаунтов', 'rule' => 'Нельзя продавать, обменивать, передавать аккаунты, привилегии и внутриигровые ценности за реальные деньги вне правил проекта.', 'category_id' => $rulMap['Аккаунт и безопасность'] ?? 1, 'punishments' => json_encode(['Бан'])],
-                    ['title' => 'Запрещены читы и модификации', 'rule' => 'Нельзя использовать читы, autoclicker, x-ray, fly, reach, kill aura, macro и любые модификации, дающие преимущество.', 'category_id' => $rulMap['Игровой процесс'] ?? 1, 'punishments' => json_encode(['Бан'])],
-                    ['title' => 'Не используйте баги', 'rule' => 'Если нашли баг — сообщите на форум или администрации. Использование бага ради выгоды запрещено.', 'category_id' => $rulMap['Игровой процесс'] ?? 1, 'punishments' => json_encode(['Откат', 'Бан'])],
-                    ['title' => 'Запрещено мешать игровому процессу', 'rule' => 'Нельзя намеренно ломать игру другим: блокировать проходы, мешать ивентам, сливать союзников, портить командную игру.', 'category_id' => $rulMap['Игровой процесс'] ?? 1, 'punishments' => json_encode(['Кик', 'Бан'])],
-                    ['title' => 'Запрещены лаг-механизмы', 'rule' => 'Не создавайте механизмы, фермы, постройки и действия, вызывающие лаги сервера или клиента.', 'category_id' => $rulMap['Игровой процесс'] ?? 1, 'punishments' => json_encode(['Удаление', 'Бан'])],
-                    ['title' => 'Обмены — на ваш риск', 'rule' => 'Администрация помогает только если есть доказательства: скриншоты, видео, ник, дата и описание ситуации.', 'category_id' => $rulMap['Экономика и обмены'] ?? 1, 'punishments' => json_encode(['По доказательствам'])],
-                    ['title' => 'Запрещён обман игроков', 'rule' => 'Скам, фейковые розыгрыши, подмена условий сделки и намеренный обман запрещены.', 'category_id' => $rulMap['Экономика и обмены'] ?? 1, 'punishments' => json_encode(['Возврат', 'Бан'])],
-                    ['title' => 'Запрещена продажа за реальные деньги', 'rule' => 'Внутриигровые предметы, валюту и услуги нельзя продавать за реальные деньги вне официальных способов проекта.', 'category_id' => $rulMap['Экономика и обмены'] ?? 1, 'punishments' => json_encode(['Бан'])],
-                    ['title' => 'Не ломайте чужое', 'rule' => 'Гриферство, кражи, порча построек и обход приватных зон запрещены, если режим не предполагает обратное.', 'category_id' => $rulMap['Постройки и территория'] ?? 1, 'punishments' => json_encode(['Откат', 'Бан'])],
-                    ['title' => 'Запрещены неприемлемые постройки', 'rule' => 'Нельзя строить оскорбительные, NSFW, политические, экстремистские и провокационные объекты.', 'category_id' => $rulMap['Постройки и территория'] ?? 1, 'punishments' => json_encode(['Удаление', 'Бан'])],
-                    ['title' => 'Следите за нагрузкой', 'rule' => 'Большие фермы и механизмы должны быть оптимизированы. Администрация может ограничить или удалить лаг-механизм.', 'category_id' => $rulMap['Постройки и территория'] ?? 1, 'punishments' => json_encode(['Предупреждение', 'Удаление'])],
-                    ['title' => 'Играйте честно', 'rule' => 'Тиминг в solo-режимах, слив каток, намеренные поражения и договорные матчи запрещены.', 'category_id' => $rulMap['Мини-игры и режимы'] ?? 1, 'punishments' => json_encode(['Бан по режиму'])],
-                    ['title' => 'Не портите командную игру', 'rule' => 'Запрещено мешать своей команде, раскрывать позиции, ломать защиту союзников или намеренно проигрывать.', 'category_id' => $rulMap['Мини-игры и режимы'] ?? 1, 'punishments' => json_encode(['Кик', 'Бан'])],
-                    ['title' => 'Уважайте особенности режима', 'rule' => 'На каждом режиме могут быть дополнительные правила. Если страница режима указывает ограничения — они считаются частью правил.', 'category_id' => $rulMap['Мини-игры и режимы'] ?? 1, 'punishments' => json_encode(['Индивидуально'])],
-                    ['title' => 'Пишите жалобы с доказательствами', 'rule' => 'Укажите ник, дату, режим, описание и приложите скриншоты или видео. Без доказательств жалоба может быть закрыта.', 'category_id' => $rulMap['Жалобы и обжалования'] ?? 1, 'punishments' => json_encode(['Рассмотрение по фактам'])],
-                    ['title' => 'Не создавайте дубликаты', 'rule' => 'Одна ситуация — одна тема. Повторные одинаковые обращения замедляют рассмотрение.', 'category_id' => $rulMap['Жалобы и обжалования'] ?? 1, 'punishments' => json_encode(['Закрытие темы'])],
-                    ['title' => 'Обжалование должно быть спокойным', 'rule' => 'Оскорбления администрации и давление не помогают. Пишите по фактам и уважительно.', 'category_id' => $rulMap['Жалобы и обжалования'] ?? 1, 'punishments' => json_encode(['Отказ', 'Мут'])]
-                ];
-
-                $stmt = db()->prepare("INSERT INTO rules 
-                    (title, rule, category_id, punishments) 
-                    VALUES (?, ?, ?, ?)");
-
-                foreach ($rulesData as $rule) {
-                    $stmt->execute([
-                        $rule['title'],
-                        $rule['rule'],
-                        $rule['category_id'],
-                        $rule['punishments'],
-                    ]);
-                }
-                echo "<p>✅ Добавлено " . count($rulesData) . " правил.</p>";
-            }
-        }
-    } catch (Throwable $e) {
-        echo "<p style='color: orange'>⚠️ Ошибка синдирования правил: " . htmlspecialchars($e->getMessage()) . "</p>";
-    }
-
-    try {
-        $subCount = db()->query('SELECT COUNT(*) as c FROM subs')->fetch()['c'] ?? 0;
-
-        if ($subCount == 0) {
-            $subsData = [
-                [
-                    'name' => 'Lapis Candy',
-                    'priceMonth' => 99,
-                    'priceAlways' => 299,
-                    'discount' => 50,
-                    'path_image' => 'bg-lapis.jpg'
-                ],
-                [
-                    'name' => 'Gold Candy',
-                    'priceMonth' => 299,
-                    'priceAlways' => 899,
-                    'discount' => 130,
-                    'path_image' => 'bg-gold.jpg'
-                ],
-                [
-                    'name' => 'Diamond Candy',
-                    'priceMonth' => 549,
-                    'priceAlways' => 1399,
-                    'discount' => 200,
-                    'path_image' => 'bg-diamond.jpg'
-                ],
-                [
-                    'name' => 'Emerald Candy',
-                    'priceMonth' => 999,
-                    'priceAlways' => 2249,
-                    'discount' => 300,
-                    'path_image' => 'bg-emerald.jpg'
-                ],
-                [
-                    'name' => 'God Of Candy',
-                    'priceMonth' => 1499,
-                    'priceAlways' => 5499,
-                    'discount' => 500,
-                    'path_image' => 'bg-god.jpg'
-                ],
-                [
-                    'name' => 'Sponsor',
-                    'priceMonth' => 2799,
-                    'priceAlways' => 22999,
-                    'discount' => 800,
-                    'path_image' => 'bg-sponsor.jpg'
-                ],
-            ];
-
-            $stmt = db()->prepare("INSERT INTO subs 
-                    (name, priceMonth, priceAlways, discount, path_image) 
-                    VALUES (?, ?, ?, ?, ?)");
-
-                foreach ($subsData as $sub) {
-                    $stmt->execute([
-                        $sub['name'],
-                        $sub['priceMonth'],
-                        $sub['priceAlways'],
-                        $sub['discount'],
-                        $sub['path_image']
-                    ]);
-                }
-                echo "<p>✅ Добавлено " . count($subsData) . " подписок.</p>";
+    // --- Роли ---
+    $roleCount = (int) $pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn();
+    if ($roleCount === 0) {
+        $roles = [
+            ['user', json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'delete_own_post' => true, 'react' => true, 'report' => true, 'send_pm' => true,
+            ])],
+            ['moderator', json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'edit_any_post' => true, 'delete_own_post' => true, 'delete_any_post' => true,
+                'lock_thread' => true, 'move_thread' => true, 'react' => true, 'report' => true,
+                'resolve_report' => true, 'ban_user' => true, 'send_pm' => true,
+            ])],
+            ['admin', json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'edit_any_post' => true, 'delete_own_post' => true, 'delete_any_post' => true,
+                'lock_thread' => true, 'move_thread' => true, 'delete_thread' => true,
+                'react' => true, 'report' => true, 'resolve_report' => true, 'ban_user' => true,
+                'manage_categories' => true, 'manage_roles' => true, 'send_pm' => true, 'view_logs' => true,
+            ])],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO roles (name, permissions) VALUES (?, ?)');
+        foreach ($roles as $r) {
+            $stmt->execute($r);
         }
     }
-    catch (Throwable $e) {
-        echo "<p style='color: orange'>⚠️ Ошибка синдирования подписок: " . htmlspecialchars($e->getMessage()) . "</p>";
+
+    // --- Пользователи ---
+    $userCount = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($userCount === 0) {
+        $passwordHash = password_hash('password', PASSWORD_DEFAULT); // пароль у всех: password
+
+        $users = [
+            // id 1 — админ
+            ['Admin',       'admin@forum.local',    $passwordHash, null, 3, 12, date('Y-m-d H:i:s', strtotime('-60 days')), date('Y-m-d H:i:s')],
+            // id 2 — модератор
+            ['Moderator',   'mod@forum.local',      $passwordHash, null, 2, 8,  date('Y-m-d H:i:s', strtotime('-45 days')), date('Y-m-d H:i:s', strtotime('-1 hour'))],
+            // обычные пользователи
+            ['Alex',        'alex@forum.local',     $passwordHash, null, 1, 15, date('Y-m-d H:i:s', strtotime('-30 days')), date('Y-m-d H:i:s', strtotime('-10 minutes'))],
+            ['Maria',       'maria@forum.local',    $passwordHash, null, 1, 9,  date('Y-m-d H:i:s', strtotime('-25 days')), date('Y-m-d H:i:s', strtotime('-2 hours'))],
+            ['Dmitry',      'dmitry@forum.local',   $passwordHash, null, 1, 6,  date('Y-m-d H:i:s', strtotime('-20 days')), date('Y-m-d H:i:s', strtotime('-1 day'))],
+            ['Elena',       'elena@forum.local',    $passwordHash, null, 1, 4,  date('Y-m-d H:i:s', strtotime('-15 days')), date('Y-m-d H:i:s', strtotime('-3 hours'))],
+            ['Ivan',        'ivan@forum.local',     $passwordHash, null, 1, 3,  date('Y-m-d H:i:s', strtotime('-10 days')), date('Y-m-d H:i:s', strtotime('-5 hours'))],
+            ['Olga',        'olga@forum.local',     $passwordHash, null, 1, 2,  date('Y-m-d H:i:s', strtotime('-7 days')),  date('Y-m-d H:i:s', strtotime('-1 day'))],
+            ['BannedUser',  'banned@forum.local',   $passwordHash, null, 1, 1,  date('Y-m-d H:i:s', strtotime('-5 days')),  null],
+        ];
+
+        $stmt = $pdo->prepare('INSERT INTO users (username, email, password_hash, avatar, role_id, posts_count, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($users as $u) {
+            $stmt->execute($u);
+        }
+
+        // Помечаем забаненного
+        $pdo->exec("UPDATE users SET is_banned = 1, ban_reason = 'Спам и оскорбления' WHERE username = 'BannedUser'");
     }
 
-    echo '<meta charset="utf-8"><style>body{font-family:Arial;background:#151322;color:#eee;padding:40px}a{color:#ff65ad}</style>';
-    echo '<h1>Готово 🍭</h1><p>База <b>lollipopmc</b> и таблицы созданы.</p><p><a href="/lollipopmc/register/">Регистрация сайта</a> · <a href="/lollipopmc/forum/register/">Регистрация форума</a> · <a href="/lollipopmc/forum/">Форум</a></p>';
+    // --- Категории ---
+    $catCount = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
+    if ($catCount === 0) {
+        $categories = [
+            [null, 'Новости и объявления', 'Официальные новости сервера и форума', 1, 0],
+            [null, 'Общение', 'Свободное общение на любые темы', 2, 0],
+            [null, 'Помощь', 'Вопросы новичков и техническая поддержка', 3, 0],
+            [null, 'Творчество', 'Скриншоты, постройки, видео, истории', 4, 0],
+            [null, 'Предложения', 'Идеи по улучшению сервера и форума', 5, 0],
+            // подкатегории
+            [2, 'Оффтоп', 'Всё что не относится к серверу', 1, 0],
+            [2, 'Знакомства', 'Расскажите о себе', 2, 0],
+            [3, 'Технические вопросы', 'Лаги, баги, ошибки', 1, 0],
+            [3, 'Как начать играть', 'Гайды для новичков', 2, 0],
+        ];
+
+        $stmt = $pdo->prepare('INSERT INTO categories (parent_id, title, description, position, is_locked) VALUES (?, ?, ?, ?, ?)');
+        foreach ($categories as $c) {
+            $stmt->execute($c);
+        }
+    }
+
+    // --- Темы и посты ---
+    $threadCount = (int) $pdo->query('SELECT COUNT(*) FROM threads')->fetchColumn();
+    if ($threadCount === 0) {
+        // Темы
+        $threads = [
+            // category_id, user_id, title, slug, is_sticky, is_locked, views, posts_count, created_at
+            [1, 1, 'Добро пожаловать на форум!', 'dobro-pozhalovat-na-forum', 1, 0, 342, 5, date('Y-m-d H:i:s', strtotime('-20 days'))],
+            [1, 1, 'Правила форума и сервера', 'pravila-foruma-i-servera', 1, 1, 289, 3, date('Y-m-d H:i:s', strtotime('-19 days'))],
+            [2, 3, 'Кто онлайн вечером?', 'kto-onlayn-vecherom', 0, 0, 156, 8, date('Y-m-d H:i:s', strtotime('-5 days'))],
+            [2, 4, 'Любимые моды и датапаки', 'lyubimye-mody-i-datapaki', 0, 0, 98, 6, date('Y-m-d H:i:s', strtotime('-4 days'))],
+            [3, 5, 'Не могу зайти на сервер — помогает кто-нибудь?', 'ne-mogu-zayti-na-server', 0, 0, 67, 4, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [4, 6, 'Моя первая большая постройка', 'moya-pervaya-bolshaya-postroyka', 0, 0, 124, 7, date('Y-m-d H:i:s', strtotime('-3 days'))],
+            [5, 3, 'Идея: система достижений', 'ideya-sistema-dostizheniy', 0, 0, 45, 3, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [6, 7, 'Что смотрите сейчас?', 'chto-smotrite-seychas', 0, 0, 88, 5, date('Y-m-d H:i:s', strtotime('-6 hours'))],
+            [8, 5, 'Ошибка при подключении (таймаут)', 'oshibka-pri-podklyuchenii-taymaut', 0, 0, 33, 2, date('Y-m-d H:i:s', strtotime('-12 hours'))],
+        ];
+
+        $stmtThread = $pdo->prepare('INSERT INTO threads (category_id, user_id, title, slug, is_sticky, is_locked, views, posts_count, created_at, last_post_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($threads as $t) {
+            $stmtThread->execute([$t[0], $t[1], $t[2], $t[3], $t[4], $t[5], $t[6], $t[7], $t[8], $t[8]]);
+        }
+
+        // Посты
+        $posts = [
+            // thread 1
+            [1, 1, "Приветствуем всех на официальном форуме!\n\nЗдесь можно общаться, задавать вопросы, предлагать идеи и делиться творчеством.\nСоблюдайте правила и будьте дружелюбны.", 1, date('Y-m-d H:i:s', strtotime('-20 days'))],
+            [1, 3, "Отлично, наконец-то нормальный форум появился!", 0, date('Y-m-d H:i:s', strtotime('-19 days'))],
+            [1, 4, "Поддерживаю, очень ждали.", 0, date('Y-m-d H:i:s', strtotime('-18 days'))],
+            [1, 2, "Модерация будет следить за порядком. Приятного общения!", 0, date('Y-m-d H:i:s', strtotime('-17 days'))],
+            [1, 6, "Зарегистрировалась, буду тут чаще появляться.", 0, date('Y-m-d H:i:s', strtotime('-10 days'))],
+
+            // thread 2
+            [2, 1, "Основные правила:\n1. Уважайте других участников\n2. Запрещён спам и флуд\n3. Запрещены оскорбления и провокации\n4. Реклама только с разрешения администрации\n\nНарушения наказываются варном или баном.", 1, date('Y-m-d H:i:s', strtotime('-19 days'))],
+            [2, 3, "Всё понятно, спасибо.", 0, date('Y-m-d H:i:s', strtotime('-18 days'))],
+            [2, 5, "А можно уточнить про рекламу ютуб-каналов?", 0, date('Y-m-d H:i:s', strtotime('-15 days'))],
+
+            // thread 3
+            [3, 3, "Кто будет сегодня вечером после 20:00? Хочу компанию для выживания.", 1, date('Y-m-d H:i:s', strtotime('-5 days'))],
+            [3, 4, "Я буду, пиши в лс.", 0, date('Y-m-d H:i:s', strtotime('-5 days +1 hour'))],
+            [3, 6, "Тоже планирую зайти часов в 21.", 0, date('Y-m-d H:i:s', strtotime('-4 days'))],
+            [3, 7, "Я пас, работа.", 0, date('Y-m-d H:i:s', strtotime('-4 days +2 hours'))],
+            [3, 3, "Отлично, жду в 21:00 у спавна.", 0, date('Y-m-d H:i:s', strtotime('-3 days'))],
+            [3, 5, "Можно и мне присоединиться?", 0, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [3, 3, "Конечно!", 0, date('Y-m-d H:i:s', strtotime('-2 days +30 minutes'))],
+            [3, 4, "Вчера было круто, давайте ещё.", 0, date('Y-m-d H:i:s', strtotime('-1 day'))],
+
+            // thread 4
+            [4, 4, "Какие моды/датапаки вам больше всего нравятся на сервере? Или что бы хотели добавить?", 1, date('Y-m-d H:i:s', strtotime('-4 days'))],
+            [4, 3, "Мне нравится всё что связано с экономикой и квестами.", 0, date('Y-m-d H:i:s', strtotime('-4 days +2 hours'))],
+            [4, 6, "Хотела бы больше декоративных блоков.", 0, date('Y-m-d H:i:s', strtotime('-3 days'))],
+            [4, 5, "Поддерживаю про декоратив.", 0, date('Y-m-d H:i:s', strtotime('-3 days +1 hour'))],
+            [4, 7, "А мне бы PvP-арену нормальную.", 0, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [4, 2, "Идеи записываем, спасибо.", 0, date('Y-m-d H:i:s', strtotime('-1 day'))],
+
+            // thread 5
+            [5, 5, "При попытке зайти пишет Connection timed out. Что делать?", 1, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [5, 2, "Проверь, не заблокирован ли IP. Также попробуй другой клиент / версию.", 0, date('Y-m-d H:i:s', strtotime('-2 days +30 minutes'))],
+            [5, 3, "У меня такая же проблема была — помог VPN.", 0, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [5, 5, "Спасибо, через VPN зашёл!", 0, date('Y-m-d H:i:s', strtotime('-1 day +2 hours'))],
+
+            // thread 6
+            [6, 6, "Построила замок в стиле средневековья. Координаты примерно X: 1200 Z: -800. Буду рада фидбеку!", 1, date('Y-m-d H:i:s', strtotime('-3 days'))],
+            [6, 3, "Ого, выглядит круто! Особенно башни.", 0, date('Y-m-d H:i:s', strtotime('-3 days +1 hour'))],
+            [6, 4, "Очень атмосферно получилось.", 0, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [6, 7, "Завидую белой завистью 🔥", 0, date('Y-m-d H:i:s', strtotime('-2 days +3 hours'))],
+            [6, 1, "Красивая работа, можно в новости сервера взять?", 0, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [6, 6, "Конечно, будет приятно!", 0, date('Y-m-d H:i:s', strtotime('-1 day +1 hour'))],
+            [6, 5, "Скинь скрины ещё ракурсов, пожалуйста.", 0, date('Y-m-d H:i:s', strtotime('-12 hours'))],
+
+            // thread 7
+            [7, 3, "Предлагаю добавить систему достижений с наградами. Например за первый алмаз, за убийство дракона и т.д.", 1, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [7, 4, "Поддерживаю, будет мотивация.", 0, date('Y-m-d H:i:s', strtotime('-20 hours'))],
+            [7, 2, "Идея хорошая, передадим разработчикам.", 0, date('Y-m-d H:i:s', strtotime('-10 hours'))],
+
+            // thread 8
+            [8, 7, "Что сейчас смотрите / слушаете?", 1, date('Y-m-d H:i:s', strtotime('-6 hours'))],
+            [8, 3, "Пересматриваю старые сезоны Игры престолов.", 0, date('Y-m-d H:i:s', strtotime('-5 hours'))],
+            [8, 4, "Подкасты про разработку.", 0, date('Y-m-d H:i:s', strtotime('-4 hours'))],
+            [8, 6, "Музыку из Minecraft OST 😌", 0, date('Y-m-d H:i:s', strtotime('-3 hours'))],
+            [8, 5, "Аниме сезон новый ловлю.", 0, date('Y-m-d H:i:s', strtotime('-2 hours'))],
+
+            // thread 9
+            [9, 5, "Постоянно выбивает с таймаутом. Пинг нормальный.", 1, date('Y-m-d H:i:s', strtotime('-12 hours'))],
+            [9, 2, "Напишите версию клиента и есть ли моды. Также приложите скрин ошибки.", 0, date('Y-m-d H:i:s', strtotime('-11 hours'))],
+        ];
+
+        $stmtPost = $pdo->prepare('INSERT INTO posts (thread_id, user_id, content, is_first, created_at) VALUES (?, ?, ?, ?, ?)');
+        foreach ($posts as $p) {
+            $stmtPost->execute($p);
+        }
+
+        // Обновляем last_post_id и last_post_at у тем
+        $pdo->exec("
+            UPDATE threads t
+            SET last_post_id = (SELECT MAX(id) FROM posts p WHERE p.thread_id = t.id),
+                last_post_at = (SELECT MAX(created_at) FROM posts p WHERE p.thread_id = t.id)
+        ");
+    }
+
+    // --- Реакции ---
+    $reactCount = (int) $pdo->query('SELECT COUNT(*) FROM reactions')->fetchColumn();
+    if ($reactCount === 0) {
+        $reactions = [
+            // post_id, user_id, type
+            [1, 3, 'like'], [1, 4, 'like'], [1, 6, 'love'], [1, 2, 'like'],
+            [2, 1, 'like'], [2, 4, 'like'],
+            [6, 3, 'like'], [6, 4, 'love'], [6, 7, 'like'], [6, 5, 'like'],
+            [9, 4, 'like'], [9, 6, 'like'],
+            [14, 3, 'like'], [14, 7, 'love'],
+            [20, 4, 'like'], [20, 5, 'like'], [20, 1, 'love'],
+            [25, 3, 'like'], [25, 6, 'like'],
+            [28, 4, 'like'], [28, 2, 'like'],
+            [30, 3, 'like'], [30, 5, 'like'], [30, 6, 'love'],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO reactions (post_id, user_id, type) VALUES (?, ?, ?)');
+        foreach ($reactions as $r) {
+            $stmt->execute($r);
+        }
+    }
+
+    // --- Уведомления ---
+    $notifCount = (int) $pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn();
+    if ($notifCount === 0) {
+        $notifications = [
+            [3, 'reply', json_encode(['thread_id' => 3, 'post_id' => 14, 'from_user_id' => 5, 'message' => 'ответил в теме «Кто онлайн вечером?»']), 0],
+            [3, 'reaction', json_encode(['post_id' => 9, 'from_user_id' => 4, 'type' => 'like']), 0],
+            [4, 'reply', json_encode(['thread_id' => 4, 'post_id' => 20, 'from_user_id' => 2, 'message' => 'ответил в теме «Любимые моды»']), 1],
+            [6, 'reply', json_encode(['thread_id' => 6, 'post_id' => 25, 'from_user_id' => 1, 'message' => 'Админ предложил взять постройку в новости']), 0],
+            [5, 'reply', json_encode(['thread_id' => 5, 'post_id' => 18, 'from_user_id' => 2, 'message' => 'Модератор ответил на ваш вопрос']), 1],
+            [1, 'report', json_encode(['report_id' => 1, 'message' => 'Новая жалоба на рассмотрении']), 0],
+            [7, 'friend_request', json_encode(['from_user_id' => 3, 'message' => 'Alex хочет добавить вас в друзья']), 0],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO notifications (user_id, type, data, is_read) VALUES (?, ?, ?, ?)');
+        foreach ($notifications as $n) {
+            $stmt->execute($n);
+        }
+    }
+
+    // --- Логи ---
+    $logCount = (int) $pdo->query('SELECT COUNT(*) FROM activity_logs')->fetchColumn();
+    if ($logCount === 0) {
+        $logs = [
+            [1, 'created_thread', 'thread', 1, '127.0.0.1', 'Mozilla/5.0', json_encode(['title' => 'Добро пожаловать на форум!'])],
+            [1, 'created_thread', 'thread', 2, '127.0.0.1', 'Mozilla/5.0', json_encode(['title' => 'Правила форума и сервера'])],
+            [3, 'created_thread', 'thread', 3, '192.168.1.10', 'Mozilla/5.0', null],
+            [2, 'locked_thread', 'thread', 2, '127.0.0.1', 'Mozilla/5.0', null],
+            [2, 'banned_user', 'user', 9, '127.0.0.1', 'Mozilla/5.0', json_encode(['reason' => 'Спам и оскорбления'])],
+            [6, 'created_thread', 'thread', 6, '10.0.0.5', 'Mozilla/5.0', null],
+            [3, 'created_post', 'post', 14, '192.168.1.10', 'Mozilla/5.0', null],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO activity_logs (user_id, action, target_type, target_id, ip, user_agent, data) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        foreach ($logs as $l) {
+            $stmt->execute($l);
+        }
+    }
+
+    // --- Репорты ---
+    $reportCount = (int) $pdo->query('SELECT COUNT(*) FROM reports')->fetchColumn();
+    if ($reportCount === 0) {
+        $reports = [
+            [4, 'post', 12, 'Флуд', 'Сообщение не по теме и повторяется', 'resolved', 2, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [3, 'user', 9, 'Оскорбления', 'Пользователь матерился в нескольких темах', 'resolved', 2, date('Y-m-d H:i:s', strtotime('-3 days'))],
+            [6, 'post', 30, 'Спам', 'Подозрительная ссылка', 'pending', null, null],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO reports (reporter_id, target_type, target_id, reason, description, status, resolved_by, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($reports as $r) {
+            $stmt->execute($r);
+        }
+    }
+
+    // --- Баны ---
+    $banCount = (int) $pdo->query('SELECT COUNT(*) FROM bans')->fetchColumn();
+    if ($banCount === 0) {
+        $pdo->prepare('INSERT INTO bans (user_id, banned_by, reason, expires_at, is_active) VALUES (?, ?, ?, ?, ?)')
+            ->execute([9, 2, 'Спам и оскорбления', null, 1]); // перманентный
+    }
+
+    // --- Вложения (тестовые записи) ---
+    $attachCount = (int) $pdo->query('SELECT COUNT(*) FROM attachments')->fetchColumn();
+    if ($attachCount === 0) {
+        $attachments = [
+            [22, 6, 'castle_main.png', 'castle_main_6f3a2b.png', '/uploads/2025/11/castle_main_6f3a2b.png', 2457600, 'image/png'],
+            [22, 6, 'castle_side.jpg', 'castle_side_9c1e4d.jpg', '/uploads/2025/11/castle_side_9c1e4d.jpg', 1894400, 'image/jpeg'],
+            [1, 1, 'welcome_banner.png', 'welcome_banner_a1b2c3.png', '/uploads/2025/10/welcome_banner_a1b2c3.png', 512000, 'image/png'],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO attachments (post_id, user_id, original_name, stored_name, path, size, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        foreach ($attachments as $a) {
+            $stmt->execute($a);
+        }
+    }
+
+    // --- Прочитанные темы ---
+    $readCount = (int) $pdo->query('SELECT COUNT(*) FROM thread_reads')->fetchColumn();
+    if ($readCount === 0) {
+        $reads = [
+            [3, 1, 5], [3, 2, 8], [3, 3, 16],
+            [4, 1, 5], [4, 3, 16], [4, 4, 21],
+            [5, 5, 19], [6, 6, 28],
+            [1, 1, 5], [1, 2, 8], [2, 1, 5], [2, 2, 8],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO thread_reads (user_id, thread_id, last_read_post_id) VALUES (?, ?, ?)');
+        foreach ($reads as $r) {
+            $stmt->execute($r);
+        }
+    }
+
+    // --- Подписки ---
+    $subCount = (int) $pdo->query('SELECT COUNT(*) FROM thread_subscriptions')->fetchColumn();
+    if ($subCount === 0) {
+        $subs = [
+            [3, 3], [3, 7], [4, 4], [4, 6],
+            [5, 5], [5, 9], [6, 6], [1, 1], [1, 2], [2, 5],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO thread_subscriptions (user_id, thread_id) VALUES (?, ?)');
+        foreach ($subs as $s) {
+            $stmt->execute($s);
+        }
+    }
+
+    // --- Друзья ---
+    $friendCount = (int) $pdo->query('SELECT COUNT(*) FROM friendships')->fetchColumn();
+    if ($friendCount === 0) {
+        $friends = [
+            [3, 4, 'accepted'],
+            [3, 6, 'accepted'],
+            [4, 6, 'accepted'],
+            [3, 5, 'accepted'],
+            [5, 7, 'pending'],
+            [7, 3, 'pending'],
+            [4, 7, 'accepted'],
+            [6, 7, 'accepted'],
+            [3, 9, 'blocked'],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, ?)');
+        foreach ($friends as $f) {
+            $stmt->execute($f);
+        }
+    }
+
+    // --- Личные сообщения ---
+    $pmCount = (int) $pdo->query('SELECT COUNT(*) FROM private_messages')->fetchColumn();
+    if ($pmCount === 0) {
+        $messages = [
+            [3, 4, 'Привет! Ты сегодня вечером будешь?', 1, date('Y-m-d H:i:s', strtotime('-2 days'))],
+            [4, 3, 'Да, примерно после 20:30', 1, date('Y-m-d H:i:s', strtotime('-2 days +10 minutes'))],
+            [3, 4, 'Отлично, встретимся у спавна', 1, date('Y-m-d H:i:s', strtotime('-2 days +15 minutes'))],
+            [6, 3, 'Спасибо за отзыв о замке! 😊', 0, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [2, 5, 'По вопросу с подключением — если снова не получится, напиши сюда лог.', 1, date('Y-m-d H:i:s', strtotime('-1 day'))],
+            [5, 2, 'Хорошо, спасибо большое!', 1, date('Y-m-d H:i:s', strtotime('-1 day +5 minutes'))],
+            [4, 6, 'Можешь кинуть координаты замка ещё раз?', 0, date('Y-m-d H:i:s', strtotime('-5 hours'))],
+            [1, 2, 'Нужно будет завтра проверить жалобы', 0, date('Y-m-d H:i:s', strtotime('-3 hours'))],
+        ];
+        $stmt = $pdo->prepare('INSERT INTO private_messages (sender_id, recipient_id, content, is_read, created_at) VALUES (?, ?, ?, ?, ?)');
+        foreach ($messages as $m) {
+            $stmt->execute($m);
+        }
+    }
+
+    // =====================================================
+    // ВЫВОД
+    // =====================================================
+
+    echo '<meta charset="utf-8">';
+    echo '<style>
+        body{font-family:system-ui,Arial,sans-serif;background:#151322;color:#eee;padding:40px;line-height:1.5}
+        a{color:#ff65ad} code{background:#2a2438;padding:2px 6px;border-radius:4px}
+        .ok{color:#7dffa0} .box{background:#1e1a2e;padding:16px 20px;border-radius:10px;margin:16px 0}
+        ul{margin:8px 0} li{margin:4px 0}
+    </style>';
+
+    echo '<h1 class="ok">Готово 🍭</h1>';
+    echo '<p>База <b>' . htmlspecialchars(DB_NAME) . '</b> создана, таблицы и тестовые данные заполнены.</p>';
+
+    echo '<div class="box"><b>Тестовые аккаунты</b> (пароль у всех: <code>password</code>):<ul>';
+    echo '<li><code>Admin</code> — администратор</li>';
+    echo '<li><code>Moderator</code> — модератор</li>';
+    echo '<li><code>Alex</code>, <code>Maria</code>, <code>Dmitry</code>, <code>Elena</code>, <code>Ivan</code>, <code>Olga</code> — обычные пользователи</li>';
+    echo '<li><code>BannedUser</code> — забанен</li>';
+    echo '</ul></div>';
+
+    echo '<div class="box"><b>Что создано:</b><ul>';
+    echo '<li>9 пользователей, 3 роли</li>';
+    echo '<li>9 категорий (включая подкатегории)</li>';
+    echo '<li>9 тем и ~40 постов</li>';
+    echo '<li>Реакции, уведомления, логи</li>';
+    echo '<li>Репорты, бан, вложения</li>';
+    echo '<li>Прочитанные темы, подписки</li>';
+    echo '<li>Друзья и личные сообщения</li>';
+    echo '</ul></div>';
+
+    echo '<p><a href="/lollipopmc/register/">Регистрация сайта</a> · <a href="/lollipopmc/forum/register/">Регистрация форума</a> · <a href="/lollipopmc/forum/">Форум</a></p>';
+
 } catch (Throwable $e) {
     http_response_code(500);
-    echo '<meta charset="utf-8"><pre>Ошибка установки: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</pre><p>Проверь app/config.php: DB_USER/DB_PASS.</p>';
+    echo '<meta charset="utf-8"><pre>Ошибка установки: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</pre>';
+    echo '<p>Проверь .env: DB_HOST / DB_DATABASE / DB_USERNAME / DB_PASSWORD.</p>';
 }

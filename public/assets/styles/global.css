@@ -1216,3 +1216,405 @@ body.dark .footer-top::after {
     padding-left: 14px;
   }
 }
+
+
+
+
+
+
+
+/* ===== Photo Carousel ===== */
+.photo-carousel {
+    --slide-width: min(70vw, 420px);
+    --gap: 28px;
+
+    position: relative;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.photo-carousel .carousel-viewport {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.photo-carousel .carousel-track {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    will-change: transform;
+}
+
+.photo-carousel .carousel-track:active {
+    cursor: grabbing;
+}
+
+.photo-carousel .slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--slide-width);
+    margin: 0 calc(var(--gap) / 2);
+    border-radius: 16px;
+    overflow: hidden;
+    transform-origin: center center;
+    transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1),
+                opacity 0.45s ease,
+                filter 0.45s ease,
+                box-shadow 0.45s ease;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    z-index: 1;
+}
+
+.slide.is-center {
+    cursor: zoom-in;
+}
+
+.photo-carousel .slide img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    pointer-events: none;
+    border-radius: 16px;
+}
+
+/* Кнопки навигации */
+.photo-carousel .nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    color: #222;
+    transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.photo-carousel .nav-btn:hover {
+    background: #fff;
+    transform: translateY(-50%) scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.photo-carousel .nav-btn.prev { left: 12px; }
+.photo-carousel .nav-btn.next { right: 12px; }
+
+/* Подвал с точками */
+.photo-carousel .carousel-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 8px 0;
+}
+
+.photo-carousel .dots {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.photo-carousel .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    background: #d0d0d0;
+    cursor: pointer;
+    transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.photo-carousel .dot:hover {
+    background: var(--accent-soft);
+    transform: scale(1.15);
+}
+
+.photo-carousel .dot.is-active {
+    background: var(--accent-deep);
+    transform: scale(1.25);
+}
+
+/* ===== Лайтбокс ===== */
+.photo-carousel .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.photo-carousel .lightbox.is-open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.photo-carousel .lightbox-content {
+    position: relative;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.photo-carousel .lightbox-slide {
+    display: none;
+    max-width: 92vw;
+    max-height: 88vh;
+}
+
+.photo-carousel .lightbox-slide.is-active {
+    display: block;
+}
+
+.photo-carousel .lightbox-slide img {
+    display: block;
+    max-width: 92vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Кнопки лайтбокса */
+.photo-carousel .lightbox-close,
+.photo-carousel .lightbox-prev,
+.photo-carousel .lightbox-next {
+    position: absolute;
+    z-index: 10;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.photo-carousel .lightbox-close:hover,
+.photo-carousel .lightbox-prev:hover,
+.photo-carousel .lightbox-next:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.08);
+}
+
+.photo-carousel .lightbox-close {
+    top: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    font-size: 32px;
+    line-height: 1;
+}
+
+.photo-carousel .lightbox-prev,
+.photo-carousel .lightbox-next {
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    font-size: 32px;
+}
+
+.photo-carousel .lightbox-prev { left: 20px; }
+.photo-carousel .lightbox-next { right: 20px; }
+
+.photo-carousel .lightbox-prev:hover,
+.photo-carousel .lightbox-next:hover {
+    transform: translateY(-50%) scale(1.08);
+}
+
+.photo-carousel .lightbox-counter {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 6px 14px;
+    border-radius: 20px;
+}
+
+/* Адаптив */
+@media (max-width: 640px) {
+    .photo-carousel {
+        --slide-width: 78vw;
+        --gap: 16px;
+    }
+
+    .photo-carousel .nav-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 22px;
+    }
+
+    .photo-carousel .dot {
+        width: 9px;
+        height: 9px;
+    }
+
+    .photo-carousel .lightbox-close {
+        top: 12px;
+        right: 12px;
+        width: 42px;
+        height: 42px;
+        font-size: 28px;
+    }
+
+    .photo-carousel .lightbox-prev,
+    .photo-carousel .lightbox-next {
+        width: 44px;
+        height: 44px;
+        font-size: 26px;
+    }
+
+    .photo-carousel .lightbox-prev { left: 10px; }
+    .photo-carousel .lightbox-next { right: 10px; }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.breadcrumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 28px;
+}
+
+.breadcrumbs a {
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.breadcrumbs a:hover {
+    color: var(--accent-soft);
+}
+
+.breadcrumbs .breadcrumb-separator {
+    color: var(--menu-icon);
+    user-select: none;
+}
+
+.breadcrumbs .breadcrumb-current {
+    color: var(--muted-strong);
+    cursor: default;
+    font-weight: 500;
+}
+
+
+
+
+
+
+
+
+
+
+
+.sub-header {
+    background: var(--pill-bg-strong);
+    padding: 12px 0;
+    font-size: 12px;
+}
+
+.sub-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.sub-header-left {
+    color: var(--muted-strong);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.sub-header-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px 20px;
+    flex-wrap: wrap;
+}
+
+.sub-header-link {
+    color: var(--muted-strong);
+    text-decoration: none;
+    transition: color 0.2s, opacity 0.2s;
+    white-space: nowrap;
+}
+
+.sub-header-link:hover {
+    color: var(--accent-soft);
+}
+
+.sub-header-link.is-active {
+    color: var(--accent-deep);
+    font-weight: 600;
+    position: relative;
+}
+
+/* Можно добавить подчёркивание у активного пункта */
+.sub-header-link.is-active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -4px;
+    height: 2px;
+    background: var(--accent-deep);
+    border-radius: 1px;
+}
+
+/* Адаптив */
+@media (max-width: 768px) {
+    .sub-header-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .sub-header-nav {
+        gap: 12px 16px;
+    }
+}

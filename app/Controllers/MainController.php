@@ -7,7 +7,7 @@ class MainController extends Controller
 {
 	public function index()
 	{
-		$this->title = 'Главная | SweetLolly';
+		$this->title = 'Главная | SweetLolly Форум';
 
 		return $this->render('main/index');
 	}

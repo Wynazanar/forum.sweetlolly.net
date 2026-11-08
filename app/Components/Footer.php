@@ -12,7 +12,7 @@ class Footer
                 <div class="container">
                     <div class="row">
                         <div style="display: flex; gap: 15px; align-items: start;">
-                            <img src="/SweetLolly_new/project/webroot/resources/footer.png" />
+                            <img src="<?= asset('resources/footer.png') ?>"/>
                             <div class="footer-text">
                                 <h3>Добро пожаловать на </br>сайт сервера <b
                                         style="color: var(--accent); font-weight: 700;">SweetLolly</b> :)</h3>
@@ -25,7 +25,7 @@ class Footer
                         <div class="footer-navigation">
                             <h3>Навигация</h3>
                             <nav class="footer-nav">
-                                <a href="/SweetLolly_new/rules/">
+                                <a href="<?= url('/rules/') ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
                                         viewBox="0 0 24 24" transform="scale(-1,1) ">
                                         <path
@@ -34,7 +34,7 @@ class Footer
                                     </svg>
                                     Правила
                                 </a>
-                                <a href="/SweetLolly_new/games/">
+                                <a href="<?= url('/games/') ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
                                         viewBox="0 0 24 24">
                                         <path
@@ -43,7 +43,7 @@ class Footer
                                     </svg>
                                     Режимы
                                 </a>
-                                <a href="/SweetLolly_new/candies/">
+                                <a href="<?= url('/candies/') ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
                                         viewBox="0 0 24 24">
                                         <path
@@ -54,7 +54,7 @@ class Footer
                                     </svg>
                                     Леденцы
                                 </a>
-                                <a href="/SweetLolly_new/help/">
+                                <a href="<?= url('/help/') ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
                                         viewBox="0 0 24 24">
                                         <path
@@ -68,7 +68,7 @@ class Footer
                         <div class="footer-community">
                             <h3>Сообщество</h3>
                             <nav class="footer-nav">
-                                <a href="./forum/">
+                                <a href="<?= url('/forum/') ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor"
                                         viewBox="0 0 24 24">
                                         <path

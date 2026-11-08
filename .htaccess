@@ -1,7 +1,7 @@
 RewriteEngine On
 
 # Если запрос идёт не к существующему файлу/папке — отправляем в public/
-RewriteCond %{REQUEST_URI} !^/SweetLolly_new/public/
+RewriteCond %{REQUEST_URI} !^/forum.sweetlolly.net/public/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ public/$1 [L]
