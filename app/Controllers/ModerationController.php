@@ -161,6 +161,38 @@ class ModerationController extends Controller
                 $data['filters']       = $filters;
                 $data['filterOptions'] = $filterOptions;
                 break;
+            
+            case 'reports':
+                $reportModel = new \App\Models\Report();
+
+                $filters = [
+                    'q'           => trim((string)($_GET['q'] ?? '')),
+                    'status'      => trim((string)($_GET['status'] ?? '')),
+                    'target_type' => trim((string)($_GET['target_type'] ?? '')),
+                    'date'        => trim((string)($_GET['date'] ?? '')),
+                ];
+                $filters = array_filter($filters, static fn($v) => $v !== null && $v !== '');
+
+                $page    = max(1, (int)($_GET['page'] ?? 1));
+                $perPage = 10;
+
+                $list = $reportModel->getList($page, $perPage, $filters);
+
+                $selectedId = (int)($_GET['id'] ?? 0);
+                $selected   = $selectedId > 0 ? $reportModel->findById($selectedId) : null;
+
+                $statusOptions = $reportModel->getStatusOptions();
+                $targetTypeOptions = $reportModel->getTargetTypeOptions();
+
+                $data['items']             = $list['items'];
+                $data['total']             = $list['total'];
+                $data['page']              = $list['page'];
+                $data['pages']             = $list['pages'];
+                $data['selected']          = $selected;
+                $data['filters']           = $filters;
+                $data['statusOptions']     = $statusOptions;
+                $data['targetTypeOptions'] = $targetTypeOptions;
+                break;
         }
 
         return $this->render('moderation/index', $data);
