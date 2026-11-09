@@ -1,3 +1,191 @@
+:root {
+    --table-header: #FAF8FC;
+    --table-border: #E9E2EE;
+}
+
+body.dark {
+}
+
+.logs-filters {
+    margin-bottom: 24px;
+}
+
+.logs-filters-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-date,
+.filter-select,
+.filter-search {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    height: 40px;
+}
+
+select,input {
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    outline: none;
+}
+
+.logs-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.logs-table-header span {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: normal;
+}
+
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0px;
+    overflow: hidden;
+}
+
+.logs-table thead {
+    background: var(--table-header);
+}
+
+.logs-table th {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding-block: 12px;
+    text-align: start;
+}
+
+.logs-table thead th:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    padding-left: 12px;
+}
+
+.logs-table thead th:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    padding-right: 12px;
+}
+
+.logs-table tbody tr {
+    background: var(--surface);
+    border-bottom: 1px solid var(--table-border);
+}
+
+.logs-table tbody td:first-of-type {
+    padding-left: 12px;
+}
+
+.logs-table tbody td:last-of-type {
+    padding-right: 12px;
+}
+
+.logs-table tbody tr.is-active {
+    background: var(--pill-bg-strong);
+}
+
+.logs-table tbody td {
+    height: 68px;
+    vertical-align: middle;
+    font-size: 14px;
+}
+
+.pagination {
+    display: flex;
+    align-items: top;
+    justify-content: space-between;
+    margin-block: 20px;
+}
+
+.pagination span {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.pagination-pages {
+    display: flex;
+    align-items: center;
+    justify-content: right;
+    gap: 8px;
+}
+
+.pagination-pages a {
+    width: 25px;
+    height: 25px;
+    border-radius: 999px;
+    background: var(--table-header);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--table-border);
+}
+
+.pagination-pages a.is-active {
+    background: var(--pill-bg-strong);
+    color: var(--accent-deep);
+}
+
+.badge {
+    padding: 4px 9px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge.badge-success {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.badge.badge-danger {
+    color: var(--danger);
+    background: var(--danger-bg);
+}
+
+.badge.badge-warning {
+    color: var(--warning);
+    background: var(--warning-bg);
+}
+
+
+
+
+
+
+.page-header {
+    margin-bottom: 24px;
+    margin-top: 32px;
+}
+
+.page-header h2 {
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.page-header p {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+
+
+
+
+
+
 .tabs {
     background: var(--surface);
     padding-block: 12px;
@@ -69,6 +257,8 @@
     padding: 24px;
     border-radius: 16px;
     border: 1px solid var(--border);
+    width: 100%;
+    height: fit-content;
 }
 
 .log-detail-card {
@@ -81,3 +271,396 @@
     font-size: 20px;
     margin-bottom: 20px;
 }
+
+.logs-note {
+    background: var(--table-header);
+    padding: 14px;
+    font-size: 12px;
+    width: 100%;
+    color: var(--muted);
+    border-radius: 10px;
+}
+
+.log-detail-list {
+    display: grid;
+    gap: 20px;
+}
+
+.log-detail-list div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.log-detail-list dt {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.log-detail-list dd {
+    font-weight: 600;
+    font-size: 12px;
+}
+/* ==========================================================================
+   Log detail panel (правая колонка) — под макет
+   ========================================================================== */
+
+.logs-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.logs-table-card {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.log-detail-card {
+    flex: 0 0 320px;
+    max-width: 340px;
+    width: 320px;
+    padding: 20px 22px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(67, 40, 110, 0.04);
+}
+
+.log-detail-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.log-detail-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--text, #2a1f3d);
+}
+
+.log-detail-header .badge {
+    align-self: flex-start;
+}
+
+/* Список полей: метка слева, значение справа */
+.log-detail-list {
+    display: grid;
+    gap: 14px;
+    margin: 0 0 18px;
+    padding: 0;
+}
+
+.log-detail-list > div {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.log-detail-list dt {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.log-detail-list dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text, #2a1f3d);
+    text-align: right;
+    word-break: break-word;
+}
+
+.log-detail-list dd .text-muted,
+.log-detail-list dd small {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    text-align: right;
+}
+
+.log-object-link {
+    color: var(--accent-deep);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.log-object-link:hover {
+    text-decoration: underline;
+}
+
+/* Изменённые значения */
+.log-changes {
+    margin: 0 0 16px;
+}
+
+.log-changes h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text, #2a1f3d);
+}
+
+.change-block {
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.change-block:last-child {
+    margin-bottom: 0;
+}
+
+.change-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    color: var(--muted);
+}
+
+.change-before {
+    background: var(--surface-2, #fbf9ff);
+    border: 1px solid var(--border, #ebe4f5);
+}
+
+.change-after {
+    background: #f3e8ff;
+    border: 1px solid #e4d4fa;
+}
+
+html.dark .change-after,
+[data-theme="dark"] .change-after {
+    background: rgba(168, 79, 236, 0.18);
+    border-color: rgba(168, 79, 236, 0.28);
+}
+
+.change-block strong {
+    font-weight: 600;
+    color: var(--text, #2a1f3d);
+}
+
+/* Комментарий */
+.log-comment {
+    margin: 0 0 16px;
+    padding-top: 4px;
+}
+
+.log-comment strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.log-comment p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text, #2a1f3d);
+}
+
+/* Кнопки в деталке */
+.log-detail-card .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 4px;
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 10px;
+    border: 1px solid var(--border, #e5dcf3);
+    background: var(--surface, #fff);
+    color: var(--text, #2a1f3d);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.log-detail-card .btn:hover {
+    background: var(--surface-2, #fbf9ff);
+    border-color: var(--accent-soft, #c58cff);
+}
+
+.log-detail-card .btn-secondary {
+    background: var(--surface);
+}
+
+/* Примечание внизу */
+.log-detail-note {
+    margin: 12px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+.empty-detail {
+    padding: 32px 8px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* История объекта (таймлайн) */
+.log-history {
+    margin: 18px 0 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border, #ebe4f5);
+}
+
+.log-history h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.log-history-note {
+    margin: 0 0 12px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.log-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.log-timeline-item {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--surface-2, #fbf9ff);
+    border: 1px solid transparent;
+}
+
+.log-timeline-item.is-current {
+    border-color: var(--accent-soft, #c58cff);
+    background: #f6edff;
+}
+
+html.dark .log-timeline-item.is-current,
+[data-theme="dark"] .log-timeline-item.is-current {
+    background: rgba(168, 79, 236, 0.15);
+    border-color: rgba(168, 79, 236, 0.35);
+}
+
+.log-timeline-time {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.log-timeline-body {
+    font-size: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.log-timeline-action {
+    font-weight: 600;
+    color: var(--text, #2a1f3d);
+    text-decoration: none;
+}
+
+.log-timeline-action:hover {
+    color: var(--accent-deep);
+}
+
+.log-timeline-admin {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.log-timeline-comment {
+    width: 100%;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--muted-strong, #6d5876);
+}
+
+/* Адаптив */
+@media (max-width: 960px) {
+    .logs-layout {
+        flex-direction: column;
+    }
+
+    .log-detail-card {
+        flex: 1 1 auto;
+        width: 100%;
+        max-width: none;
+    }
+}
+
+/* Роль участника в логах */
+.log-role-tag {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 1px 7px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+.log-role-user {
+    color: var(--muted-strong, #6d5876);
+    background: var(--surface-2, #fbf9ff);
+    border: 1px solid var(--border, #ebe4f5);
+}
+
+.log-role-moderator {
+    color: #5b4a9e;
+    background: #efe8ff;
+    border: 1px solid #ddd0fa;
+}
+
+.log-role-admin {
+    color: #7a3eb0;
+    background: #f3e0ff;
+    border: 1px solid #e4c4f8;
+}
+
+html.dark .log-role-moderator,
+[data-theme="dark"] .log-role-moderator {
+    color: #c4b0ff;
+    background: rgba(139, 87, 255, 0.18);
+    border-color: rgba(139, 87, 255, 0.3);
+}
+
+html.dark .log-role-admin,
+[data-theme="dark"] .log-role-admin {
+    color: #e0b8ff;
+    background: rgba(168, 79, 236, 0.22);
+    border-color: rgba(168, 79, 236, 0.35);
+}
+
+.logs-table tbody td .log-role-tag {
+    margin-top: 4px;
+}
+

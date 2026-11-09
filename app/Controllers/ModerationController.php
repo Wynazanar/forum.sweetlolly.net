@@ -114,28 +114,53 @@ class ModerationController extends Controller
             case 'logs':
                 $logModel = new ActivityLog();
 
-                $page = max(1, (int)($_GET['page'] ?? 1));
-                $list = $logModel->getList($page, 20);
+                $filters = [
+                    'q'        => trim((string)($_GET['q'] ?? '')),
+                    'date'     => trim((string)($_GET['date'] ?? '')),
+                    'admin_id' => ($_GET['admin_id'] ?? '') !== '' ? (int)$_GET['admin_id'] : null,
+                    'action'   => trim((string)($_GET['action'] ?? '')),
+                    'result'   => trim((string)($_GET['result'] ?? '')),
+                    'role'     => trim((string)($_GET['role'] ?? '')),
+                ];
+                $filters = array_filter($filters, static fn($v) => $v !== null && $v !== '');
+
+                $page    = max(1, (int)($_GET['page'] ?? 1));
+                $perPage = 7;
+
+                $list = $logModel->getList($page, $perPage, $filters);
 
                 $selectedId  = (int)($_GET['id'] ?? 0);
                 $selectedLog = $selectedId > 0 ? $logModel->findById($selectedId) : null;
 
-                $data['logs']        = $list['items'];
-                $data['logsTotal']   = $list['total'];
-                $data['logsPage']    = $list['page'];
-                $data['logsPages']   = $list['pages'];
-                $data['selectedLog'] = $selectedLog;
-                break;
+                // История изменений того же объекта (target_type + target_id)
+                $logHistory = [];
+                if ($selectedLog) {
+                    $logHistory = $logModel->getHistoryForTarget(
+                        $selectedLog['target_type'] ?? null,
+                        isset($selectedLog['target_id']) ? (int)$selectedLog['target_id'] : null
+                    );
+                }
 
-            case 'players':
-                // позже
-                break;
+                $filterOptions = [
+                    'admins'  => $logModel->getActorOptions(), // участники (игроки + моды + админы)
+                    'actions' => $logModel->getActionOptions(),
+                    'roles'   => $logModel->getRoleOptions(),
+                    'results' => [
+                        'success' => 'Успешно',
+                        'denied'  => 'Отказано',
+                        'error'   => 'Ошибка',
+                    ],
+                ];
 
-            case 'reports':
-                // позже
+                $data['logs']          = $list['items'];
+                $data['logsTotal']     = $list['total'];
+                $data['logsPage']      = $list['page'];
+                $data['logsPages']     = $list['pages'];
+                $data['selectedLog']   = $selectedLog;
+                $data['logHistory']    = $logHistory;
+                $data['filters']       = $filters;
+                $data['filterOptions'] = $filterOptions;
                 break;
-
-            // остальные табы...
         }
 
         return $this->render('moderation/index', $data);

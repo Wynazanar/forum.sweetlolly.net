@@ -4,5 +4,5 @@ namespace App\Components;
 
 ?>
 <main>
-  kek
+  <a href="<?= url('/moderation') ?>">МОДЕРАЦИЯ</a>
 </main>

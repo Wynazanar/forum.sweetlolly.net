@@ -487,16 +487,39 @@ try {
     // --- Логи ---
     $logCount = (int) $pdo->query('SELECT COUNT(*) FROM activity_logs')->fetchColumn();
     if ($logCount === 0) {
+        // Каждый элемент: user_id, action, result, target_type, target_id, object_title, ip, ua, data, comment
         $logs = [
-            [1, 'created_thread', 'thread', 1, '127.0.0.1', 'Mozilla/5.0', json_encode(['title' => 'Добро пожаловать на форум!'])],
-            [1, 'created_thread', 'thread', 2, '127.0.0.1', 'Mozilla/5.0', json_encode(['title' => 'Правила форума и сервера'])],
-            [3, 'created_thread', 'thread', 3, '192.168.1.10', 'Mozilla/5.0', null],
-            [2, 'locked_thread', 'thread', 2, '127.0.0.1', 'Mozilla/5.0', null],
-            [2, 'banned_user', 'user', 9, '127.0.0.1', 'Mozilla/5.0', json_encode(['reason' => 'Спам и оскорбления'])],
-            [6, 'created_thread', 'thread', 6, '10.0.0.5', 'Mozilla/5.0', null],
-            [3, 'created_post', 'post', 14, '192.168.1.10', 'Mozilla/5.0', null],
+            // Темы
+            [1, 'created_thread', 'success', 'thread', 1, 'Добро пожаловать на форум!', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['title' => 'Добро пожаловать на форум!', 'slug' => 'dobro-pozhalovat'], JSON_UNESCAPED_UNICODE), null],
+            [1, 'created_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['title' => 'Правила форума и сервера', 'slug' => 'pravila-foruma'], JSON_UNESCAPED_UNICODE), null],
+            [3, 'created_thread', 'success', 'thread', 3, 'Тема пользователя #3', '192.168.1.10', 'Mozilla/5.0', null, null],
+            [2, 'locked_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['before' => ['is_locked' => 0], 'after' => ['is_locked' => 1]], JSON_UNESCAPED_UNICODE), 'Закрыто по правилам'],
+            [6, 'created_thread', 'success', 'thread', 6, 'Тема пользователя #6', '10.0.0.5', 'Mozilla/5.0', null, null],
+
+            // Бан
+            [2, 'banned_user', 'success', 'user', 9, 'Пользователь #9', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['reason' => 'Спам и оскорбления', 'before' => ['is_banned' => 0], 'after' => ['is_banned' => 1]], JSON_UNESCAPED_UNICODE), null],
+
+            // Пост
+            [3, 'created_post', 'success', 'post', 14, 'Пост #14', '192.168.1.10', 'Mozilla/5.0',
+                json_encode(['thread_id' => 3], JSON_UNESCAPED_UNICODE), null],
+
+            // История одного репорта (target_type=report, target_id=1) — несколько логов
+            [4, 'created_report', 'success', 'report', 1, 'Репорт #1 (пост)', '10.0.0.8', 'Mozilla/5.0',
+                json_encode(['reason' => 'Флуд', 'target_type' => 'post', 'target_id' => 12], JSON_UNESCAPED_UNICODE), null],
+            [2, 'opened_report', 'success', 'report', 1, 'Репорт #1 (пост)', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['before' => ['status' => 'pending'], 'after' => ['status' => 'in_progress']], JSON_UNESCAPED_UNICODE), 'Взял в работу'],
+            [2, 'resolved_report', 'success', 'report', 1, 'Репорт #1 (пост)', '127.0.0.1', 'Mozilla/5.0',
+                json_encode(['before' => ['status' => 'in_progress'], 'after' => ['status' => 'resolved']], JSON_UNESCAPED_UNICODE), 'Пост удалён, нарушитель предупреждён'],
         ];
-        $stmt = $pdo->prepare('INSERT INTO activity_logs (user_id, action, target_type, target_id, ip, user_agent, data) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare(
+            'INSERT INTO activity_logs
+                (user_id, action, result, target_type, target_id, object_title, ip, user_agent, data, comment)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
         foreach ($logs as $l) {
             $stmt->execute($l);
         }
