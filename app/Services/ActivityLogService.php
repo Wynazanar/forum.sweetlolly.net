@@ -298,4 +298,70 @@ class ActivityLogService
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? null;
         return $ua ? mb_substr($ua, 0, 255) : null;
     }
+
+    // -------------------------------------------------------------------------
+    // Разделы / категории
+    // -------------------------------------------------------------------------
+
+    public static function sectionCreated(
+        int $userId,
+        int $sectionId,
+        string $title,
+        ?int $parentId = null,
+        ?array $extra = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'created_section',
+            'success',
+            'category',
+            $sectionId,
+            $title,
+            array_filter([
+                'parent_id' => $parentId,
+                'title'     => $title,
+            ] + ($extra ?? []))
+        );
+    }
+
+    public static function sectionUpdated(
+        int $userId,
+        int $sectionId,
+        string $title,
+        ?array $before = null,
+        ?array $after = null,
+        ?string $comment = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'updated_section',
+            'success',
+            'category',
+            $sectionId,
+            $title,
+            [
+                'before' => $before,
+                'after'  => $after,
+            ],
+            $comment
+        );
+    }
+
+    public static function sectionDeleted(
+        int $userId,
+        int $sectionId,
+        string $title,
+        ?string $comment = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'deleted_section',
+            'success',
+            'category',
+            $sectionId,
+            $title,
+            null,
+            $comment
+        );
+    }
 }

@@ -74,13 +74,32 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS categories (
-        id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        parent_id   INT UNSIGNED NULL,
-        title       VARCHAR(150) NOT NULL,
-        description TEXT NULL,
-        position    SMALLINT NOT NULL DEFAULT 0,
-        is_locked   TINYINT(1) NOT NULL DEFAULT 0,
-        FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
+        id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        parent_id           INT UNSIGNED NULL,
+        title               VARCHAR(150) NOT NULL,
+        slug                VARCHAR(160) NOT NULL,
+        description         TEXT NULL,
+        position            SMALLINT NOT NULL DEFAULT 0,
+
+        -- права
+        access              ENUM('public','players','moderators','admins','closed') NOT NULL DEFAULT 'public',
+        can_create_topics   ENUM('all','players','moderators','admins') NOT NULL DEFAULT 'players',
+        can_reply           ENUM('all','players','moderators','admins') NOT NULL DEFAULT 'players',
+        managed_by          ENUM('moderators','admins') NOT NULL DEFAULT 'admins',
+
+        -- флаги
+        moderate_topics     TINYINT(1) NOT NULL DEFAULT 0,
+        allow_attachments   TINYINT(1) NOT NULL DEFAULT 1,
+        allow_guest_posts   TINYINT(1) NOT NULL DEFAULT 0,
+
+        status              ENUM('published','draft','hidden') NOT NULL DEFAULT 'published',
+        is_locked           TINYINT(1) NOT NULL DEFAULT 0,
+        created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at          TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+
+        UNIQUE KEY uq_categories_slug (slug),
+        FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+        INDEX idx_parent_position (parent_id, position)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS threads (
@@ -328,19 +347,22 @@ try {
     $catCount = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
     if ($catCount === 0) {
         $categories = [
-            [null, 'Новости и объявления', 'Официальные новости сервера и форума', 1, 0],
-            [null, 'Общение', 'Свободное общение на любые темы', 2, 0],
-            [null, 'Помощь', 'Вопросы новичков и техническая поддержка', 3, 0],
-            [null, 'Творчество', 'Скриншоты, постройки, видео, истории', 4, 0],
-            [null, 'Предложения', 'Идеи по улучшению сервера и форума', 5, 0],
+            // parent_id, title, slug, description, position, access, can_create_topics, can_reply, managed_by, moderate_topics, allow_attachments, allow_guest_posts, status, is_locked
+            [null, 'Новости и объявления', 'news',        'Официальные новости сервера и форума', 1, 'public',  'admins',  'players', 'admins', 0, 1, 0, 'published', 0],
+            [null, 'Общение',             'community',   'Свободное общение на любые темы', 2, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            [null, 'Помощь',              'help',        'Вопросы новичков и техническая поддержка', 3, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            [null, 'Творчество',          'creative',    'Скриншоты, постройки, видео, истории', 4, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            [null, 'Предложения',         'suggestions', 'Идеи по улучшению сервера и форума', 5, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
             // подкатегории
-            [2, 'Оффтоп', 'Всё что не относится к серверу', 1, 0],
-            [2, 'Знакомства', 'Расскажите о себе', 2, 0],
-            [3, 'Технические вопросы', 'Лаги, баги, ошибки', 1, 0],
-            [3, 'Как начать играть', 'Гайды для новичков', 2, 0],
+            [2, 'Оффтоп',                 'offtopic',        'Всё что не относится к серверу', 1, 'players', 'players', 'players', 'moderators', 0, 1, 0, 'published', 0],
+            [2, 'Знакомства',             'introductions',   'Расскажите о себе', 2, 'players', 'players', 'players', 'moderators', 0, 1, 0, 'published', 0],
+            [3, 'Технические вопросы',    'tech-support',    'Лаги, баги, ошибки', 1, 'players', 'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            [3, 'Как начать играть',      'getting-started', 'Гайды для новичков', 2, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
         ];
 
-        $stmt = $pdo->prepare('INSERT INTO categories (parent_id, title, description, position, is_locked) VALUES (?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO categories 
+            (parent_id, title, slug, description, position, access, can_create_topics, can_reply, managed_by, moderate_topics, allow_attachments, allow_guest_posts, status, is_locked) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($categories as $c) {
             $stmt->execute($c);
         }

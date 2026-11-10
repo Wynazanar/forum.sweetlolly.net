@@ -15,7 +15,7 @@ class Model
 
     protected function findOne(string $sql, array $params = []): ?array
     {
-        $stmt = $this->execute($sql, $params);
+        $stmt = $this->query($sql, $params);
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         return $row ?: null;
@@ -23,7 +23,7 @@ class Model
 
     protected function findMany(string $sql, array $params = []): array
     {
-        $stmt = $this->execute($sql, $params);
+        $stmt = $this->query($sql, $params);
         $result = $stmt->get_result();
         $data = [];
         while ($row = $result->fetch_assoc()) {
@@ -33,7 +33,35 @@ class Model
         return $data;
     }
 
-    private function execute(string $sql, array $params): \mysqli_stmt
+    /**
+     * Для SELECT — возвращает mysqli_stmt
+     */
+    protected function query(string $sql, array $params = []): \mysqli_stmt
+    {
+        return $this->prepareAndExecute($sql, $params);
+    }
+
+    /**
+     * Для INSERT / UPDATE / DELETE
+     */
+    protected function execute(string $sql, array $params = []): bool
+    {
+        $stmt = $this->prepareAndExecute($sql, $params);
+        $stmt->close();
+        return true;
+    }
+
+    protected function lastInsertId(): int
+    {
+        return (int) self::$link->insert_id;
+    }
+
+    protected function affectedRows(): int
+    {
+        return (int) self::$link->affected_rows;
+    }
+
+    private function prepareAndExecute(string $sql, array $params): \mysqli_stmt
     {
         $stmt = self::$link->prepare($sql);
         if (!$stmt) {
@@ -41,7 +69,16 @@ class Model
         }
 
         if ($params) {
-            $types = str_repeat('s', count($params)); // упрощённо, всё как string
+            $types = '';
+            foreach ($params as $param) {
+                if (is_int($param)) {
+                    $types .= 'i';
+                } elseif (is_float($param)) {
+                    $types .= 'd';
+                } else {
+                    $types .= 's';
+                }
+            }
             $stmt->bind_param($types, ...$params);
         }
 
