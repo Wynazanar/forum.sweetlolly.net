@@ -51,13 +51,15 @@ class Section extends Model
         $sectionsByParent = [];
 
         foreach ($rows as $row) {
-            if ($row['parent_id'] === null) {
+            // PDO может вернуть parent_id как строку — сравниваем строго с null после приведения
+            $parentId = $row['parent_id'];
+            if ($parentId === null || $parentId === '' || $parentId === false) {
                 $row['sections'] = [];
                 $row['is_category'] = true;
-                $categories[$row['id']] = $row;
+                $categories[(int)$row['id']] = $row;
             } else {
                 $row['is_category'] = false;
-                $sectionsByParent[$row['parent_id']][] = $row;
+                $sectionsByParent[(int)$parentId][] = $row;
             }
         }
 
@@ -65,9 +67,10 @@ class Section extends Model
             if (isset($categories[$parentId])) {
                 $categories[$parentId]['sections'] = $sections;
             }
+            // секции без родителя-категории не показываем (битые данные)
         }
 
-        // Фильтр по названию / slug (простой)
+        // Фильтр по названию / slug
         if (!empty($filters['q'])) {
             $q = mb_strtolower(trim($filters['q']));
             $categories = array_filter($categories, function ($cat) use ($q) {
@@ -81,6 +84,23 @@ class Section extends Model
                 ));
 
                 return $matchCat || !empty($cat['sections']);
+            });
+        }
+
+        // Фильтр по view_role_id
+        if (array_key_exists('view_role_id', $filters) && $filters['view_role_id'] !== '' && $filters['view_role_id'] !== null) {
+            $want = $filters['view_role_id'];
+            $categories = array_filter($categories, function ($cat) use ($want) {
+                $catMatch = (string)($cat['view_role_id'] ?? '') === (string)$want
+                         || ($want === '' && ($cat['view_role_id'] === null || $cat['view_role_id'] === ''));
+
+                $cat['sections'] = array_values(array_filter(
+                    $cat['sections'] ?? [],
+                    fn($s) => (string)($s['view_role_id'] ?? '') === (string)$want
+                           || ($want === '' && ($s['view_role_id'] === null || $s['view_role_id'] === ''))
+                ));
+
+                return $catMatch || !empty($cat['sections']);
             });
         }
 
@@ -107,7 +127,7 @@ class Section extends Model
             return null;
         }
 
-        $row['is_category'] = $row['parent_id'] === null;
+        $row['is_category'] = ($row['parent_id'] === null || $row['parent_id'] === '');
 
         // Если это раздел — подтянем название родителя
         if (!$row['is_category']) {
@@ -135,7 +155,7 @@ class Section extends Model
     }
 
     /**
-     * Опции категорий для фильтра
+     * Опции категорий для фильтра / select родителя
      */
     public function getCategoryOptions(): array
     {
@@ -155,23 +175,31 @@ class Section extends Model
      */
     public function create(array $data): int
     {
-        $parentId         = $data['parent_id'] ?? null;
+        $parentId = $data['parent_id'] ?? null;
+        if ($parentId === '' || $parentId === false) {
+            $parentId = null;
+        } elseif ($parentId !== null) {
+            $parentId = (int)$parentId;
+        }
+
         $title            = trim($data['title'] ?? '');
         $slug             = $this->uniqueSlug($data['slug'] ?? $this->makeSlug($title));
         $desc             = $data['description'] ?? null;
         $position         = (int)($data['position'] ?? $this->nextPosition($parentId));
-        $viewRoleId     = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
+
+        $viewRoleId   = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
             ? (int)$data['view_role_id'] : null;
-        $createRoleId   = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
+        $createRoleId = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
             ? (int)$data['create_role_id'] : null;
-        $replyRoleId    = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
+        $replyRoleId  = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
             ? (int)$data['reply_role_id'] : null;
-        $manageRoleId   = (int)($data['manage_role_id'] ?? 3);
+        $manageRoleId = (int)($data['manage_role_id'] ?? 3);
+
         $moderateTopics   = !empty($data['moderate_topics']) ? 1 : 0;
         $allowAttachments = !empty($data['allow_attachments']) ? 1 : 0;
         $allowGuestPosts  = !empty($data['allow_guest_posts']) ? 1 : 0;
         $status           = $data['status'] ?? 'published';
-        $isLocked = !empty($data['is_locked']) ? 1 : 0;
+        $isLocked         = !empty($data['is_locked']) ? 1 : 0;
 
         $this->execute(
             "INSERT INTO categories (
@@ -196,37 +224,45 @@ class Section extends Model
      */
     public function update(int $id, array $data): bool
     {
-        $title            = trim($data['title'] ?? '');
-        $slug             = $this->uniqueSlug($data['slug'] ?? $this->makeSlug($title), $id);
-        $desc             = $data['description'] ?? null;
-        $position         = isset($data['position']) ? (int)$data['position'] : null;
-        $viewRoleId     = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
+        $title = trim($data['title'] ?? '');
+        $slug  = $this->uniqueSlug($data['slug'] ?? $this->makeSlug($title), $id);
+        $desc  = $data['description'] ?? null;
+        $position = isset($data['position']) ? (int)$data['position'] : null;
+
+        $viewRoleId   = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
             ? (int)$data['view_role_id'] : null;
-        $createRoleId   = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
+        $createRoleId = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
             ? (int)$data['create_role_id'] : null;
-        $replyRoleId    = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
+        $replyRoleId  = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
             ? (int)$data['reply_role_id'] : null;
-        $manageRoleId   = (int)($data['manage_role_id'] ?? 3);
+        $manageRoleId = (int)($data['manage_role_id'] ?? 3);
+
         $moderateTopics   = !empty($data['moderate_topics']) ? 1 : 0;
         $allowAttachments = !empty($data['allow_attachments']) ? 1 : 0;
         $allowGuestPosts  = !empty($data['allow_guest_posts']) ? 1 : 0;
         $status           = $data['status'] ?? 'published';
-        $isLocked       = !empty($data['is_locked']) ? 1 : 0;
-        $parentId         = array_key_exists('parent_id', $data) ? $data['parent_id'] : null;
+        $isLocked         = !empty($data['is_locked']) ? 1 : 0;
+
+        $parentId = null;
+        if (array_key_exists('parent_id', $data)) {
+            $parentId = ($data['parent_id'] === '' || $data['parent_id'] === null)
+                ? null
+                : (int)$data['parent_id'];
+        }
 
         $fields = [
-            'title'            => $title,
-            'slug'             => $slug,
-            'description'      => $desc,
-            'view_role_id'     => $viewRoleId,
-            'create_role_id'   => $createRoleId,
-            'reply_role_id'    => $replyRoleId,
-            'manage_role_id'   => $manageRoleId,
-            'moderate_topics'  => $moderateTopics,
-            'allow_attachments'=> $allowAttachments,
-            'allow_guest_posts'=> $allowGuestPosts,
-            'status'           => $status,
-            'is_locked'        => $isLocked,
+            'title'              => $title,
+            'slug'               => $slug,
+            'description'        => $desc,
+            'view_role_id'       => $viewRoleId,
+            'create_role_id'     => $createRoleId,
+            'reply_role_id'      => $replyRoleId,
+            'manage_role_id'     => $manageRoleId,
+            'moderate_topics'    => $moderateTopics,
+            'allow_attachments'  => $allowAttachments,
+            'allow_guest_posts'  => $allowGuestPosts,
+            'status'             => $status,
+            'is_locked'          => $isLocked,
         ];
 
         if ($position !== null) {
@@ -255,13 +291,11 @@ class Section extends Model
      */
     public function delete(int $id): array
     {
-        // Есть ли дочерние разделы?
         $children = $this->findOne("SELECT COUNT(*) as cnt FROM categories WHERE parent_id = ?", [$id]);
         if (($children['cnt'] ?? 0) > 0) {
             return ['ok' => false, 'error' => 'Сначала удалите или переместите вложенные разделы'];
         }
 
-        // Есть ли темы?
         $threads = $this->findOne("SELECT COUNT(*) as cnt FROM threads WHERE category_id = ?", [$id]);
         if (($threads['cnt'] ?? 0) > 0) {
             return ['ok' => false, 'error' => 'В разделе есть темы. Сначала перенесите или удалите их'];
@@ -309,7 +343,6 @@ class Section extends Model
         }
     }
 
-    // Обнови makeSlug (если ещё нет):
     private function makeSlug(string $title): string
     {
         $map = [

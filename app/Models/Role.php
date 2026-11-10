@@ -16,20 +16,19 @@ class Role extends Model
     }
 
     /**
-     * [name => label] для селектов
-     * label = красивое имя роли
+     * [id => label] для селектов
      */
     public function getOptions(): array
-{
-    $rows = $this->getAll();
-    $options = [];
+    {
+        $rows = $this->getAll();
+        $options = [];
 
-    foreach ($rows as $row) {
-        $options[(string)$row['id']] = $this->label($row['name']);
+        foreach ($rows as $row) {
+            $options[(string)$row['id']] = $this->label($row['name']);
+        }
+
+        return $options;
     }
-
-    return $options;
-}
 
     private function label(string $name): string
     {

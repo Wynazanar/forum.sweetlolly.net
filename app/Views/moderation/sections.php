@@ -158,7 +158,7 @@
             total: (int)($total ?? count($flatItems)),
             pages: (int)($totalPages ?? 1),
             filters: $filters ?? [],
-            filterConfig: $filterConfig,
+            // filterConfig: $filterConfig,
             emptyText: 'Разделов пока нет',
             rowClass: function (array $row) use ($selected) {
                 $classes = [];
@@ -187,10 +187,6 @@
                 </div>
 
                 <?= $table ?>
-
-                <p class="logs-note">
-                    Порядок задаётся внутри родительской категории.
-                </p>
             </div>
 
             <!-- Правая панель -->

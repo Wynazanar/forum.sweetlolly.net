@@ -283,6 +283,117 @@ try {
         INDEX (sender_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
+    $sql[] = "CREATE TABLE IF NOT EXISTS application_layouts (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+        name VARCHAR(100) NOT NULL,
+        slug VARCHAR(100) NOT NULL UNIQUE,
+        description VARCHAR(255) DEFAULT NULL,
+
+        -- Настройки сетки
+        columns_count TINYINT UNSIGNED NOT NULL DEFAULT 12,
+        gap INT UNSIGNED NOT NULL DEFAULT 16,
+
+        -- Дополнительные настройки отображения
+        settings JSON NOT NULL,
+
+        is_system TINYINT(1) NOT NULL DEFAULT 0,
+        created_by INT UNSIGNED DEFAULT NULL,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+
+    $sql[] = "CREATE TABLE IF NOT EXISTS application_forms (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+        layout_id INT UNSIGNED DEFAULT NULL,
+
+        name VARCHAR(150) NOT NULL,
+        slug VARCHAR(150) NOT NULL UNIQUE,
+
+        -- Например: team, unban, other
+        application_type VARCHAR(50) DEFAULT NULL,
+
+        description TEXT DEFAULT NULL,
+
+        -- Кто может отправлять заявки
+        allowed_submitters JSON NOT NULL,
+
+        -- Кто получает уведомления
+        -- Например: [1, 2, 5]
+        notify_user_ids JSON NOT NULL,
+
+        -- Кто может просматривать заявки
+        visibility JSON NOT NULL,
+
+        -- Вопросы анкеты и их индивидуальное расположение
+        questions JSON NOT NULL,
+
+        -- Принимать ли новые заявки
+        accepting TINYINT(1) NOT NULL DEFAULT 0,
+
+        -- draft / published / archived
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+
+        created_by INT UNSIGNED DEFAULT NULL,
+        updated_by INT UNSIGNED DEFAULT NULL,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ON UPDATE CURRENT_TIMESTAMP,
+
+        INDEX idx_forms_status (status),
+        INDEX idx_forms_accepting (accepting),
+        INDEX idx_forms_layout (layout_id),
+        INDEX idx_forms_type (application_type),
+
+        CONSTRAINT fk_forms_layout
+            FOREIGN KEY (layout_id)
+            REFERENCES application_layouts(id)
+            ON DELETE SET NULL
+            ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+
+    $sql[] = "CREATE TABLE IF NOT EXISTS applications (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+        form_id INT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+
+        -- Ответы игрока
+        answers JSON NOT NULL,
+
+        -- Снимок вопросов и настроек на момент отправки.
+        -- Нужен, чтобы изменения шаблона не портили старые заявки.
+        form_snapshot JSON NOT NULL,
+
+        -- pending / accepted / rejected / cancelled
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+        reviewed_by INT UNSIGNED DEFAULT NULL,
+        reviewed_at DATETIME DEFAULT NULL,
+
+        admin_comment TEXT DEFAULT NULL,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ON UPDATE CURRENT_TIMESTAMP,
+
+        INDEX idx_applications_form (form_id),
+        INDEX idx_applications_user (user_id),
+        INDEX idx_applications_status (status),
+        INDEX idx_applications_created (created_at),
+        INDEX idx_applications_reviewer (reviewed_by),
+
+        CONSTRAINT fk_applications_form
+            FOREIGN KEY (form_id)
+            REFERENCES application_forms(id)
+            ON DELETE RESTRICT
+            ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+
     foreach ($sql as $query) {
         $pdo->exec($query);
     }
@@ -725,6 +836,9 @@ try {
             $stmt->execute($m);
         }
     }
+
+    // --- Макеты ---
+    
 
     // =====================================================
     // ВЫВОД
