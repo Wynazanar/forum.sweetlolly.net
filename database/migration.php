@@ -81,11 +81,12 @@ try {
         description         TEXT NULL,
         position            SMALLINT NOT NULL DEFAULT 0,
 
-        -- права
-        access              ENUM('public','players','moderators','admins','closed') NOT NULL DEFAULT 'public',
-        can_create_topics   ENUM('all','players','moderators','admins') NOT NULL DEFAULT 'players',
-        can_reply           ENUM('all','players','moderators','admins') NOT NULL DEFAULT 'players',
-        managed_by          ENUM('moderators','admins') NOT NULL DEFAULT 'admins',
+        -- права (реальные FK на roles.id)
+        -- NULL = public / all
+        view_role_id        TINYINT UNSIGNED NULL COMMENT 'NULL = public, иначе роль для просмотра',
+        create_role_id      TINYINT UNSIGNED NULL COMMENT 'NULL = all, иначе роль для создания тем',
+        reply_role_id       TINYINT UNSIGNED NULL COMMENT 'NULL = all, иначе роль для ответов',
+        manage_role_id      TINYINT UNSIGNED NOT NULL DEFAULT 3 COMMENT 'роль, которая управляет разделом',
 
         -- флаги
         moderate_topics     TINYINT(1) NOT NULL DEFAULT 0,
@@ -93,12 +94,16 @@ try {
         allow_guest_posts   TINYINT(1) NOT NULL DEFAULT 0,
 
         status              ENUM('published','draft','hidden') NOT NULL DEFAULT 'published',
-        is_locked           TINYINT(1) NOT NULL DEFAULT 0,
+        is_locked           TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = закрытый раздел',
         created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at          TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
 
         UNIQUE KEY uq_categories_slug (slug),
         FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+        FOREIGN KEY (view_role_id) REFERENCES roles(id) ON DELETE RESTRICT,
+        FOREIGN KEY (create_role_id) REFERENCES roles(id) ON DELETE RESTRICT,
+        FOREIGN KEY (reply_role_id) REFERENCES roles(id) ON DELETE RESTRICT,
+        FOREIGN KEY (manage_role_id) REFERENCES roles(id) ON DELETE RESTRICT,
         INDEX idx_parent_position (parent_id, position)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
@@ -166,25 +171,25 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS activity_logs (
-    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id         BIGINT UNSIGNED NULL,                    -- кто совершил действие
-    action          VARCHAR(100) NOT NULL,                   -- например: assign_complaint, change_access
-    result          ENUM('success', 'denied', 'error') NOT NULL DEFAULT 'success',
-    target_type     VARCHAR(50) NULL,                        -- complaint, report, user, category...
-    target_id       BIGINT UNSIGNED NULL,
-    object_title    VARCHAR(255) NULL,                        -- Жалоба C-104, Команда форума
-    ip              VARCHAR(45) NULL,
-    user_agent      VARCHAR(255) NULL,
-    data            JSON NULL,                               -- before / after / extra
-    comment         TEXT NULL,                               -- Передано на проверку
-    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-    INDEX (user_id, created_at),
-    INDEX (action, created_at),
-    INDEX (result, created_at),
-    INDEX (target_type, target_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+        id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id         BIGINT UNSIGNED NULL,
+        action          VARCHAR(100) NOT NULL,
+        result          ENUM('success', 'denied', 'error') NOT NULL DEFAULT 'success',
+        target_type     VARCHAR(50) NULL,
+        target_id       BIGINT UNSIGNED NULL,
+        object_title    VARCHAR(255) NULL,
+        ip              VARCHAR(45) NULL,
+        user_agent      VARCHAR(255) NULL,
+        data            JSON NULL,
+        comment         TEXT NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX (user_id, created_at),
+        INDEX (action, created_at),
+        INDEX (result, created_at),
+        INDEX (target_type, target_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS reports (
         id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -283,6 +288,81 @@ try {
     }
 
     // =====================================================
+    // МИГРАЦИЯ СТАРОЙ СХЕМЫ categories (ENUM → FK)
+    // =====================================================
+    // Если таблица уже существовала со старыми колонками — аккуратно переводим.
+    try {
+        $hasOldAccess = !empty($pdo->query("SHOW COLUMNS FROM categories LIKE 'access'")->fetchAll());
+        $hasNewView   = !empty($pdo->query("SHOW COLUMNS FROM categories LIKE 'view_role_id'")->fetchAll());
+
+        if ($hasOldAccess && !$hasNewView) {
+            // 1. Добавляем новые колонки
+            $pdo->exec("ALTER TABLE categories ADD COLUMN view_role_id   TINYINT UNSIGNED NULL AFTER position");
+            $pdo->exec("ALTER TABLE categories ADD COLUMN create_role_id TINYINT UNSIGNED NULL AFTER view_role_id");
+            $pdo->exec("ALTER TABLE categories ADD COLUMN reply_role_id  TINYINT UNSIGNED NULL AFTER create_role_id");
+            $pdo->exec("ALTER TABLE categories ADD COLUMN manage_role_id TINYINT UNSIGNED NOT NULL DEFAULT 3 AFTER reply_role_id");
+
+            // 2. Маппинг старых строковых значений → id ролей (1=user, 2=moderator, 3=admin)
+            $pdo->exec("
+                UPDATE categories SET
+                    view_role_id = CASE access
+                        WHEN 'public'     THEN NULL
+                        WHEN 'players'    THEN 1
+                        WHEN 'moderators' THEN 2
+                        WHEN 'admins'     THEN 3
+                        WHEN 'closed'     THEN NULL
+                        ELSE NULL
+                    END,
+                    create_role_id = CASE can_create_topics
+                        WHEN 'all'        THEN NULL
+                        WHEN 'players'    THEN 1
+                        WHEN 'moderators' THEN 2
+                        WHEN 'admins'     THEN 3
+                        ELSE 1
+                    END,
+                    reply_role_id = CASE can_reply
+                        WHEN 'all'        THEN NULL
+                        WHEN 'players'    THEN 1
+                        WHEN 'moderators' THEN 2
+                        WHEN 'admins'     THEN 3
+                        ELSE 1
+                    END,
+                    manage_role_id = CASE managed_by
+                        WHEN 'moderators' THEN 2
+                        WHEN 'admins'     THEN 3
+                        ELSE 3
+                    END,
+                    is_locked = CASE
+                        WHEN access = 'closed' THEN 1
+                        ELSE is_locked
+                    END
+            ");
+
+            // 3. Удаляем старые ENUM-колонки
+            $pdo->exec("ALTER TABLE categories DROP COLUMN access");
+            $pdo->exec("ALTER TABLE categories DROP COLUMN can_create_topics");
+            $pdo->exec("ALTER TABLE categories DROP COLUMN can_reply");
+            $pdo->exec("ALTER TABLE categories DROP COLUMN managed_by");
+
+            // 4. FK (тихо игнорируем, если уже есть)
+            foreach ([
+                'fk_categories_view_role'   => 'view_role_id',
+                'fk_categories_create_role' => 'create_role_id',
+                'fk_categories_reply_role'  => 'reply_role_id',
+                'fk_categories_manage_role' => 'manage_role_id',
+            ] as $fkName => $col) {
+                try {
+                    $pdo->exec("ALTER TABLE categories ADD CONSTRAINT {$fkName} FOREIGN KEY ({$col}) REFERENCES roles(id) ON DELETE RESTRICT");
+                } catch (Throwable $e) {
+                    // constraint already exists
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // Таблица categories ещё не существует / нет прав — пропускаем
+    }
+
+    // =====================================================
     // СИДЫ (тестовые данные)
     // =====================================================
 
@@ -344,24 +424,29 @@ try {
     }
 
     // --- Категории ---
+    // Роли: 1 = user, 2 = moderator, 3 = admin
     $catCount = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
     if ($catCount === 0) {
         $categories = [
-            // parent_id, title, slug, description, position, access, can_create_topics, can_reply, managed_by, moderate_topics, allow_attachments, allow_guest_posts, status, is_locked
-            [null, 'Новости и объявления', 'news',        'Официальные новости сервера и форума', 1, 'public',  'admins',  'players', 'admins', 0, 1, 0, 'published', 0],
-            [null, 'Общение',             'community',   'Свободное общение на любые темы', 2, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
-            [null, 'Помощь',              'help',        'Вопросы новичков и техническая поддержка', 3, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
-            [null, 'Творчество',          'creative',    'Скриншоты, постройки, видео, истории', 4, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
-            [null, 'Предложения',         'suggestions', 'Идеи по улучшению сервера и форума', 5, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            // parent_id, title, slug, description, position,
+            // view_role_id, create_role_id, reply_role_id, manage_role_id,
+            // moderate_topics, allow_attachments, allow_guest_posts, status, is_locked
+            [null, 'Новости и объявления', 'news',        'Официальные новости сервера и форума', 1, null, 3, 1, 3, 0, 1, 0, 'published', 0],
+            [null, 'Общение',             'community',   'Свободное общение на любые темы', 2, null, 1, 1, 3, 0, 1, 0, 'published', 0],
+            [null, 'Помощь',              'help',        'Вопросы новичков и техническая поддержка', 3, null, 1, 1, 3, 0, 1, 0, 'published', 0],
+            [null, 'Творчество',          'creative',    'Скриншоты, постройки, видео, истории', 4, null, 1, 1, 3, 0, 1, 0, 'published', 0],
+            [null, 'Предложения',         'suggestions', 'Идеи по улучшению сервера и форума', 5, null, 1, 1, 3, 0, 1, 0, 'published', 0],
             // подкатегории
-            [2, 'Оффтоп',                 'offtopic',        'Всё что не относится к серверу', 1, 'players', 'players', 'players', 'moderators', 0, 1, 0, 'published', 0],
-            [2, 'Знакомства',             'introductions',   'Расскажите о себе', 2, 'players', 'players', 'players', 'moderators', 0, 1, 0, 'published', 0],
-            [3, 'Технические вопросы',    'tech-support',    'Лаги, баги, ошибки', 1, 'players', 'players', 'players', 'admins', 0, 1, 0, 'published', 0],
-            [3, 'Как начать играть',      'getting-started', 'Гайды для новичков', 2, 'public',  'players', 'players', 'admins', 0, 1, 0, 'published', 0],
+            [2, 'Оффтоп',                 'offtopic',        'Всё что не относится к серверу', 1, 1, 1, 1, 2, 0, 1, 0, 'published', 0],
+            [2, 'Знакомства',             'introductions',   'Расскажите о себе', 2, 1, 1, 1, 2, 0, 1, 0, 'published', 0],
+            [3, 'Технические вопросы',    'tech-support',    'Лаги, баги, ошибки', 1, 1, 1, 1, 3, 0, 1, 0, 'published', 0],
+            [3, 'Как начать играть',      'getting-started', 'Гайды для новичков', 2, null, 1, 1, 3, 0, 1, 0, 'published', 0],
         ];
 
         $stmt = $pdo->prepare('INSERT INTO categories 
-            (parent_id, title, slug, description, position, access, can_create_topics, can_reply, managed_by, moderate_topics, allow_attachments, allow_guest_posts, status, is_locked) 
+            (parent_id, title, slug, description, position,
+             view_role_id, create_role_id, reply_role_id, manage_role_id,
+             moderate_topics, allow_attachments, allow_guest_posts, status, is_locked) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($categories as $c) {
             $stmt->execute($c);
@@ -509,9 +594,7 @@ try {
     // --- Логи ---
     $logCount = (int) $pdo->query('SELECT COUNT(*) FROM activity_logs')->fetchColumn();
     if ($logCount === 0) {
-        // Каждый элемент: user_id, action, result, target_type, target_id, object_title, ip, ua, data, comment
         $logs = [
-            // Темы
             [1, 'created_thread', 'success', 'thread', 1, 'Добро пожаловать на форум!', '127.0.0.1', 'Mozilla/5.0',
                 json_encode(['title' => 'Добро пожаловать на форум!', 'slug' => 'dobro-pozhalovat'], JSON_UNESCAPED_UNICODE), null],
             [1, 'created_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
@@ -520,16 +603,10 @@ try {
             [2, 'locked_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
                 json_encode(['before' => ['is_locked' => 0], 'after' => ['is_locked' => 1]], JSON_UNESCAPED_UNICODE), 'Закрыто по правилам'],
             [6, 'created_thread', 'success', 'thread', 6, 'Тема пользователя #6', '10.0.0.5', 'Mozilla/5.0', null, null],
-
-            // Бан
             [2, 'banned_user', 'success', 'user', 9, 'Пользователь #9', '127.0.0.1', 'Mozilla/5.0',
                 json_encode(['reason' => 'Спам и оскорбления', 'before' => ['is_banned' => 0], 'after' => ['is_banned' => 1]], JSON_UNESCAPED_UNICODE), null],
-
-            // Пост
             [3, 'created_post', 'success', 'post', 14, 'Пост #14', '192.168.1.10', 'Mozilla/5.0',
                 json_encode(['thread_id' => 3], JSON_UNESCAPED_UNICODE), null],
-
-            // История одного репорта (target_type=report, target_id=1) — несколько логов
             [4, 'created_report', 'success', 'report', 1, 'Репорт #1 (пост)', '10.0.0.8', 'Mozilla/5.0',
                 json_encode(['reason' => 'Флуд', 'target_type' => 'post', 'target_id' => 12], JSON_UNESCAPED_UNICODE), null],
             [2, 'opened_report', 'success', 'report', 1, 'Репорт #1 (пост)', '127.0.0.1', 'Mozilla/5.0',
@@ -565,10 +642,10 @@ try {
     $banCount = (int) $pdo->query('SELECT COUNT(*) FROM bans')->fetchColumn();
     if ($banCount === 0) {
         $pdo->prepare('INSERT INTO bans (user_id, banned_by, reason, expires_at, is_active) VALUES (?, ?, ?, ?, ?)')
-            ->execute([9, 2, 'Спам и оскорбления', null, 1]); // перманентный
+            ->execute([9, 2, 'Спам и оскорбления', null, 1]);
     }
 
-    // --- Вложения (тестовые записи) ---
+    // --- Вложения ---
     $attachCount = (int) $pdo->query('SELECT COUNT(*) FROM attachments')->fetchColumn();
     if ($attachCount === 0) {
         $attachments = [

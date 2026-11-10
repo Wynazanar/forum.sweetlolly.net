@@ -6,7 +6,7 @@ use App\Services\AuthService;
 use App\Models\ActivityLog;
 use App\Models\Section;
 use App\Models\Report;
-
+use App\Models\Role;
 
 class ModerationController extends Controller
 {
@@ -80,11 +80,12 @@ class ModerationController extends Controller
     private function handleSections(array &$data): void
     {
         $sectionModel = new Section();
+        $roleModel    = new Role();
 
         $filters = [
-            'q'           => trim((string)($_GET['q'] ?? '')),
-            'category_id' => ($_GET['category_id'] ?? '') !== '' ? (int)$_GET['category_id'] : null,
-            'access'      => trim((string)($_GET['access'] ?? '')),
+            'q'            => trim((string)($_GET['q'] ?? '')),
+            'category_id'  => ($_GET['category_id'] ?? '') !== '' ? (int)$_GET['category_id'] : null,
+            'view_role_id' => trim((string)($_GET['view_role_id'] ?? '')),
         ];
         $filters = array_filter($filters, static fn($v) => $v !== null && $v !== '');
 
@@ -98,10 +99,10 @@ class ModerationController extends Controller
         $data['selected']        = $selected;
         $data['filters']         = $filters;
         $data['categoryOptions'] = $sectionModel->getCategoryOptions();
-        $data['accessOptions']   = [
-            'public'  => 'Публичный',
-            'closed'  => 'Закрытый',
-        ];
+
+        // '' = Публичный + роли по id
+        $data['accessOptions'] = ['' => 'Публичный'] + $roleModel->getOptions();
+        $data['roleOptions']   = $roleModel->getOptions(); // id => label
     }
 
     // =========================================================

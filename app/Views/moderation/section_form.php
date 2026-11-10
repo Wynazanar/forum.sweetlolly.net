@@ -62,10 +62,10 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Кто может просматривать</label>
-                        <select name="access">
+                        <select name="view_role_id">
                             <?php foreach ($accessOptions as $val => $label): ?>
-                                <option value="<?= $val ?>"
-                                    <?= ($item['access'] ?? 'public') === $val ? 'selected' : '' ?>>
+                                <option value="<?= htmlspecialchars((string)$val) ?>"
+                                    <?= (string)($item['view_role_id'] ?? '') === (string)$val ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($label) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -74,10 +74,10 @@
 
                     <div class="form-group">
                         <label>Кто может создавать темы</label>
-                        <select name="can_create_topics">
+                        <select name="create_role_id">
                             <?php foreach ($audienceOptions as $val => $label): ?>
-                                <option value="<?= $val ?>"
-                                    <?= ($item['can_create_topics'] ?? 'players') === $val ? 'selected' : '' ?>>
+                                <option value="<?= htmlspecialchars((string)$val) ?>"
+                                    <?= (string)($item['create_role_id'] ?? '') === (string)$val ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($label) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -88,10 +88,10 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Кто может отвечать</label>
-                        <select name="can_reply">
+                        <select name="reply_role_id">
                             <?php foreach ($audienceOptions as $val => $label): ?>
-                                <option value="<?= $val ?>"
-                                    <?= ($item['can_reply'] ?? 'players') === $val ? 'selected' : '' ?>>
+                                <option value="<?= htmlspecialchars((string)$val) ?>"
+                                    <?= (string)($item['reply_role_id'] ?? '') === (string)$val ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($label) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -100,10 +100,10 @@
 
                     <div class="form-group">
                         <label>Кто управляет разделом</label>
-                        <select name="managed_by">
+                        <select name="manage_role_id">
                             <?php foreach ($managedByOptions as $val => $label): ?>
-                                <option value="<?= $val ?>"
-                                    <?= ($item['managed_by'] ?? 'admins') === $val ? 'selected' : '' ?>>
+                                <option value="<?= htmlspecialchars((string)$val) ?>"
+                                    <?= (string)($item['manage_role_id'] ?? '3') === (string)$val ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($label) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -124,6 +124,13 @@
                 </div>
 
                 <div class="form-toggles">
+                    <label class="toggle">
+                        <span>Раздел закрыт</span>
+                        <input type="checkbox" name="is_locked" value="1"
+                            <?= !empty($item['is_locked']) ? 'checked' : '' ?>>
+                        <span class="switch"></span>
+                    </label>
+
                     <label class="toggle">
                         <span>Проверять новые темы перед публикацией</span>
                         <input type="checkbox" name="moderate_topics" value="1"
@@ -146,7 +153,6 @@
                     </label>
                 </div>
             </div>
-
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">

@@ -18,10 +18,10 @@ class Section extends Model
                 c.slug,
                 c.description,
                 c.position,
-                c.access,
-                c.can_create_topics,
-                c.can_reply,
-                c.managed_by,
+                c.view_role_id,
+                c.create_role_id,
+                c.reply_role_id,
+                c.manage_role_id,
                 c.moderate_topics,
                 c.allow_attachments,
                 c.allow_guest_posts,
@@ -95,7 +95,7 @@ class Section extends Model
         $row = $this->findOne(
             "SELECT 
                 id, parent_id, title, slug, description, position,
-                access, can_create_topics, can_reply, managed_by,
+                view_role_id, create_role_id, reply_role_id, manage_role_id,
                 moderate_topics, allow_attachments, allow_guest_posts,
                 status, is_locked
             FROM categories 
@@ -160,26 +160,29 @@ class Section extends Model
         $slug             = $this->uniqueSlug($data['slug'] ?? $this->makeSlug($title));
         $desc             = $data['description'] ?? null;
         $position         = (int)($data['position'] ?? $this->nextPosition($parentId));
-        $access           = $data['access'] ?? 'public';
-        $canCreateTopics  = $data['can_create_topics'] ?? 'players';
-        $canReply         = $data['can_reply'] ?? 'players';
-        $managedBy        = $data['managed_by'] ?? 'admins';
+        $viewRoleId     = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
+            ? (int)$data['view_role_id'] : null;
+        $createRoleId   = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
+            ? (int)$data['create_role_id'] : null;
+        $replyRoleId    = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
+            ? (int)$data['reply_role_id'] : null;
+        $manageRoleId   = (int)($data['manage_role_id'] ?? 3);
         $moderateTopics   = !empty($data['moderate_topics']) ? 1 : 0;
         $allowAttachments = !empty($data['allow_attachments']) ? 1 : 0;
         $allowGuestPosts  = !empty($data['allow_guest_posts']) ? 1 : 0;
         $status           = $data['status'] ?? 'published';
-        $isLocked         = ($access === 'closed') ? 1 : 0;
+        $isLocked = !empty($data['is_locked']) ? 1 : 0;
 
         $this->execute(
             "INSERT INTO categories (
                 parent_id, title, slug, description, position,
-                access, can_create_topics, can_reply, managed_by,
+                view_role_id, create_role_id, reply_role_id, manage_role_id,
                 moderate_topics, allow_attachments, allow_guest_posts,
                 status, is_locked
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 $parentId, $title, $slug, $desc, $position,
-                $access, $canCreateTopics, $canReply, $managedBy,
+                $viewRoleId, $createRoleId, $replyRoleId, $manageRoleId,
                 $moderateTopics, $allowAttachments, $allowGuestPosts,
                 $status, $isLocked,
             ]
@@ -197,30 +200,33 @@ class Section extends Model
         $slug             = $this->uniqueSlug($data['slug'] ?? $this->makeSlug($title), $id);
         $desc             = $data['description'] ?? null;
         $position         = isset($data['position']) ? (int)$data['position'] : null;
-        $access           = $data['access'] ?? 'public';
-        $canCreateTopics  = $data['can_create_topics'] ?? 'players';
-        $canReply         = $data['can_reply'] ?? 'players';
-        $managedBy        = $data['managed_by'] ?? 'admins';
+        $viewRoleId     = array_key_exists('view_role_id', $data) && $data['view_role_id'] !== '' && $data['view_role_id'] !== null
+            ? (int)$data['view_role_id'] : null;
+        $createRoleId   = array_key_exists('create_role_id', $data) && $data['create_role_id'] !== '' && $data['create_role_id'] !== null
+            ? (int)$data['create_role_id'] : null;
+        $replyRoleId    = array_key_exists('reply_role_id', $data) && $data['reply_role_id'] !== '' && $data['reply_role_id'] !== null
+            ? (int)$data['reply_role_id'] : null;
+        $manageRoleId   = (int)($data['manage_role_id'] ?? 3);
         $moderateTopics   = !empty($data['moderate_topics']) ? 1 : 0;
         $allowAttachments = !empty($data['allow_attachments']) ? 1 : 0;
         $allowGuestPosts  = !empty($data['allow_guest_posts']) ? 1 : 0;
         $status           = $data['status'] ?? 'published';
-        $isLocked         = ($access === 'closed') ? 1 : 0;
+        $isLocked       = !empty($data['is_locked']) ? 1 : 0;
         $parentId         = array_key_exists('parent_id', $data) ? $data['parent_id'] : null;
 
         $fields = [
-            'title'              => $title,
-            'slug'               => $slug,
-            'description'        => $desc,
-            'access'             => $access,
-            'can_create_topics'  => $canCreateTopics,
-            'can_reply'          => $canReply,
-            'managed_by'         => $managedBy,
-            'moderate_topics'    => $moderateTopics,
-            'allow_attachments'  => $allowAttachments,
-            'allow_guest_posts'  => $allowGuestPosts,
-            'status'             => $status,
-            'is_locked'          => $isLocked,
+            'title'            => $title,
+            'slug'             => $slug,
+            'description'      => $desc,
+            'view_role_id'     => $viewRoleId,
+            'create_role_id'   => $createRoleId,
+            'reply_role_id'    => $replyRoleId,
+            'manage_role_id'   => $manageRoleId,
+            'moderate_topics'  => $moderateTopics,
+            'allow_attachments'=> $allowAttachments,
+            'allow_guest_posts'=> $allowGuestPosts,
+            'status'           => $status,
+            'is_locked'        => $isLocked,
         ];
 
         if ($position !== null) {

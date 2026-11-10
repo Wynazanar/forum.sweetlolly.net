@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Models\Section;
+use App\Models\Role;
 use App\Services\AuthService;
 use App\Services\ActivityLogService;
 
@@ -61,9 +62,12 @@ class SectionService
                 $data['title'],
                 $data['parent_id'],
                 [
-                    'slug'   => $data['slug'],
-                    'access' => $data['access'],
-                    'status' => $data['status'],
+                    'slug'           => $data['slug'],
+                    'view_role_id'   => $data['view_role_id'],
+                    'create_role_id' => $data['create_role_id'],
+                    'reply_role_id'  => $data['reply_role_id'],
+                    'manage_role_id' => $data['manage_role_id'],
+                    'status'         => $data['status'],
                 ]
             );
         }
@@ -77,8 +81,8 @@ class SectionService
      */
     public function update(int $id, array $input): array
     {
-        $item = $this->model->findById($id);
-        if (!$item) {
+        $old = $this->model->findById($id);
+        if (!$old) {
             return ['ok' => false, 'errors' => ['id' => 'Раздел не найден']];
         }
 
@@ -97,17 +101,17 @@ class SectionService
                 (int)$userId,
                 $id,
                 $data['title'],
-                $old ? [
-                    'title'  => $old['title'],
-                    'slug'   => $old['slug'] ?? null,
-                    'access' => $old['access'] ?? null,
-                    'status' => $old['status'] ?? null,
-                ] : null,
                 [
-                    'title'  => $data['title'],
-                    'slug'   => $data['slug'],
-                    'access' => $data['access'],
-                    'status' => $data['status'],
+                    'title'          => $old['title'],
+                    'slug'           => $old['slug'] ?? null,
+                    'view_role_id'   => $old['view_role_id'] ?? null,
+                    'status'         => $old['status'] ?? null,
+                ],
+                [
+                    'title'          => $data['title'],
+                    'slug'           => $data['slug'],
+                    'view_role_id'   => $data['view_role_id'],
+                    'status'         => $data['status'],
                 ]
             );
         }
@@ -162,22 +166,38 @@ class SectionService
             $parentId = null;
         }
 
+        // '' / null → NULL в БД (public / all)
+        $viewRoleId = array_key_exists('view_role_id', $input) && $input['view_role_id'] !== '' && $input['view_role_id'] !== null
+            ? (int)$input['view_role_id']
+            : null;
+
+        $createRoleId = array_key_exists('create_role_id', $input) && $input['create_role_id'] !== '' && $input['create_role_id'] !== null
+            ? (int)$input['create_role_id']
+            : null;
+
+        $replyRoleId = array_key_exists('reply_role_id', $input) && $input['reply_role_id'] !== '' && $input['reply_role_id'] !== null
+            ? (int)$input['reply_role_id']
+            : null;
+
+        $manageRoleId = (int)($input['manage_role_id'] ?? 3);
+
         return [
-            'parent_id'          => $parentId,
-            'title'              => $title,
-            'slug'               => $slug,
-            'description'        => trim($input['description'] ?? '') ?: null,
-            'position'           => isset($input['position']) && $input['position'] !== ''
+            'parent_id'         => $parentId,
+            'title'             => $title,
+            'slug'              => $slug,
+            'description'       => trim($input['description'] ?? '') ?: null,
+            'position'          => isset($input['position']) && $input['position'] !== ''
                 ? (int)$input['position']
                 : null,
-            'access'             => $input['access'] ?? 'public',
-            'can_create_topics'  => $input['can_create_topics'] ?? 'players',
-            'can_reply'          => $input['can_reply'] ?? 'players',
-            'managed_by'         => $input['managed_by'] ?? 'admins',
+            'view_role_id'      => $viewRoleId,
+            'create_role_id'    => $createRoleId,
+            'reply_role_id'     => $replyRoleId,
+            'manage_role_id'    => $manageRoleId,
             'moderate_topics'   => !empty($input['moderate_topics']) ? 1 : 0,
             'allow_attachments' => !empty($input['allow_attachments']) ? 1 : 0,
             'allow_guest_posts' => !empty($input['allow_guest_posts']) ? 1 : 0,
-            'status'             => $input['status'] ?? 'published',
+            'status'            => $input['status'] ?? 'published',
+            'is_locked'         => !empty($input['is_locked']) ? 1 : 0,
         ];
     }
 
@@ -200,11 +220,6 @@ class SectionService
             $errors['slug'] = 'Slug может содержать только латиницу, цифры и дефис';
         }
 
-        $allowedAccess = ['public', 'players', 'moderators', 'admins', 'closed'];
-        if (!in_array($data['access'], $allowedAccess, true)) {
-            $errors['access'] = 'Недопустимое значение доступа';
-        }
-
         $allowedStatus = ['published', 'draft', 'hidden'];
         if (!in_array($data['status'], $allowedStatus, true)) {
             $errors['status'] = 'Недопустимый статус';
@@ -220,18 +235,33 @@ class SectionService
             }
         }
 
+        $roleKeys = array_map('strval', array_keys($this->roleOptions())); // ['1','2','3',...]
+
+        // view_role_id: null = public, иначе id роли
+        if ($data['view_role_id'] !== null && !in_array((string)$data['view_role_id'], $roleKeys, true)) {
+            $errors['view_role_id'] = 'Недопустимое значение доступа';
+        }
+
+        // create / reply: null = all, иначе id роли
+        foreach (['create_role_id', 'reply_role_id'] as $field) {
+            if ($data[$field] !== null && !in_array((string)$data[$field], $roleKeys, true)) {
+                $errors[$field] = 'Недопустимое значение';
+            }
+        }
+
+        // manage — всегда id роли
+        if (!in_array((string)$data['manage_role_id'], $roleKeys, true)) {
+            $errors['manage_role_id'] = 'Недопустимое значение';
+        }
+
         return $errors;
     }
 
     public function accessOptions(): array
     {
-        return [
-            'public'     => 'Публичный',
-            'players'    => 'Игроки',
-            'moderators' => 'Модераторы',
-            'admins'     => 'Администраторы',
-            'closed'     => 'Закрытый',
-        ];
+        // '' = public
+        $options = ['' => 'Все посетители'];
+        return $options + $this->roleOptions();
     }
 
     public function statusOptions(): array
@@ -245,19 +275,24 @@ class SectionService
 
     public function audienceOptions(): array
     {
-        return [
-            'all'        => 'Все посетители',
-            'players'    => 'Зарегистрированные игроки',
-            'moderators' => 'Модераторы',
-            'admins'     => 'Администраторы',
-        ];
+        // '' = all
+        $options = ['' => 'Все посетители'];
+        return $options + $this->roleOptions();
     }
 
     public function managedByOptions(): array
     {
-        return [
-            'moderators' => 'Модераторы',
-            'admins'     => 'Администраторы',
-        ];
+        return $this->roleOptions();
+    }
+
+    private function roleOptions(): array
+    {
+        static $cache = null;
+
+        if ($cache === null) {
+            $cache = (new Role())->getOptions();
+        }
+
+        return $cache;
     }
 }

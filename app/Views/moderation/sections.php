@@ -10,54 +10,64 @@
 
         <?php
         use App\Components\AdminTable;
+        use App\Models\Role;
 
-        $accessOptions = $accessOptions ?? [
-            'public'       => 'Публичный',
-            'players'      => 'Игроки',
-            'moderators'   => 'Модераторы',
-            'admins'       => 'Администраторы',
-            'closed'       => 'Закрытый',
-        ];
+        $roleOptions = $roleOptions ?? (new Role())->getOptions(); // id => label
 
-        $visibilityOptions = $visibilityOptions ?? [
-            'all'    => 'Любая видимость',
-            'public' => 'Публичный',
-            'closed' => 'Закрытый',
-        ];
+        // options для фильтра: '' = Публичный + роли
+        $accessOptions = $accessOptions ?? (['' => 'Публичный'] + $roleOptions);
 
         // Подготовка плоского списка для таблицы (категории + секции)
         $flatItems = [];
         foreach ($categories as $category) {
+            $viewRoleId = $category['view_role_id'] ?? null;
             $flatItems[] = [
                 'id'            => $category['id'],
                 'parent_id'     => null,
                 'title'         => $category['title'],
                 'description'   => $category['description'] ?? '',
                 'slug'          => $category['slug'] ?? '',
-                'access'        => $category['access'] ?? 'public',
+                'view_role_id'  => $viewRoleId,
                 'position'      => $category['position'] ?? 0,
                 'topics_count'  => $category['topics_count'] ?? 0,
                 'posts_count'   => $category['posts_count'] ?? 0,
                 'is_category'   => true,
                 'status'        => $category['status'] ?? 'published',
+                'is_locked'     => $category['is_locked'] ?? 0,
             ];
 
             foreach ($category['sections'] ?? [] as $section) {
+                $viewRoleId = $section['view_role_id'] ?? null;
                 $flatItems[] = [
                     'id'            => $section['id'],
                     'parent_id'     => $category['id'],
                     'title'         => $section['title'],
                     'description'   => $section['description'] ?? '',
                     'slug'          => $section['slug'] ?? '',
-                    'access'        => $section['access'] ?? 'players',
+                    'view_role_id'  => $viewRoleId,
                     'position'      => $section['position'] ?? 0,
                     'topics_count'  => $section['topics_count'] ?? 0,
                     'posts_count'   => $section['posts_count'] ?? 0,
                     'is_category'   => false,
                     'status'        => $section['status'] ?? 'published',
                     'parent_title'  => $category['title'],
+                    'is_locked'     => $section['is_locked'] ?? 0,
                 ];
             }
+        }
+
+        // Бейджи доступа: динамически из ролей + public/closed
+        $accessBadgeMap = [
+            ''  => ['label' => 'Публичный', 'class' => 'badge-success'],
+        ];
+        foreach ($roleOptions as $id => $label) {
+            $class = match ((int)$id) {
+                1 => 'badge-info',
+                2 => 'badge-warning',
+                3 => 'badge-danger',
+                default => 'badge-secondary',
+            };
+            $accessBadgeMap[(string)$id] = ['label' => $label, 'class' => $class];
         }
 
         $columns = [
@@ -94,16 +104,20 @@
                 },
             ],
             [
-                'key'  => 'access',
+                'key'  => 'view_role_id',
                 'label'=> 'Доступ',
                 'type' => 'badge',
-                'map'  => [
-                    'public'     => ['label' => 'Публичный',     'class' => 'badge-success'],
-                    'players'    => ['label' => 'Игроки',        'class' => 'badge-info'],
-                    'moderators' => ['label' => 'Модераторы',    'class' => 'badge-warning'],
-                    'admins'     => ['label' => 'Администраторы','class' => 'badge-danger'],
-                    'closed'     => ['label' => 'Закрытый',      'class' => 'badge-secondary'],
-                ],
+                'map'  => $accessBadgeMap,
+                'render' => function (array $row) use ($accessBadgeMap): string {
+                    if (!empty($row['is_locked'])) {
+                        return '<span class="badge badge-secondary">Закрытый</span>';
+                    }
+                    $key = $row['view_role_id'] === null || $row['view_role_id'] === ''
+                        ? ''
+                        : (string)$row['view_role_id'];
+                    $badge = $accessBadgeMap[$key] ?? ['label' => $key ?: 'Публичный', 'class' => 'badge-secondary'];
+                    return '<span class="badge ' . $badge['class'] . '">' . htmlspecialchars($badge['label']) . '</span>';
+                },
             ],
             [
                 'key'   => 'topics_count',
@@ -132,7 +146,7 @@
         $filterConfig = [
             ['name' => 'q', 'type' => 'search', 'placeholder' => 'Название раздела или slug'],
             ['name' => 'category_id', 'type' => 'select', 'empty' => 'Все категории', 'options' => $categoryOptions ?? []],
-            ['name' => 'access', 'type' => 'select', 'empty' => 'Любая видимость', 'options' => $visibilityOptions],
+            ['name' => 'view_role_id', 'type' => 'select', 'empty' => 'Любая видимость', 'options' => $accessOptions],
         ];
 
         $table = AdminTable::make(
@@ -202,7 +216,27 @@
                             default     => $status,
                         };
 
-                        $accessLabel = $accessOptions[$selected['access'] ?? ''] ?? ($selected['access'] ?? '—');
+                        // Просмотр
+                        if (!empty($selected['is_locked'])) {
+                            $viewLabel = 'Закрытый';
+                        } else {
+                            $vr = $selected['view_role_id'] ?? null;
+                            $viewLabel = ($vr === null || $vr === '')
+                                ? 'Публичный'
+                                : ($roleOptions[(string)$vr] ?? $vr);
+                        }
+
+                        // Создание тем
+                        $cr = $selected['create_role_id'] ?? null;
+                        $createLabel = ($cr === null || $cr === '')
+                            ? 'Все'
+                            : ($roleOptions[(string)$cr] ?? $cr);
+
+                        // Управление
+                        $mr = $selected['manage_role_id'] ?? null;
+                        $manageLabel = ($mr === null || $mr === '')
+                            ? '—'
+                            : ($roleOptions[(string)$mr] ?? $mr);
                     ?>
 
                     <div class="log-detail-header">
@@ -225,17 +259,17 @@
 
                         <div>
                             <dt>Просмотр</dt>
-                            <dd><?= htmlspecialchars($accessLabel) ?></dd>
+                            <dd><?= htmlspecialchars($viewLabel) ?></dd>
                         </div>
 
                         <div>
                             <dt>Создание тем</dt>
-                            <dd><?= htmlspecialchars($selected['can_create_topics'] ?? 'Игроки форума') ?></dd>
+                            <dd><?= htmlspecialchars($createLabel) ?></dd>
                         </div>
 
                         <div>
-                            <dt>Модерация</dt>
-                            <dd><?= htmlspecialchars($selected['moderation'] ?? 'Администраторы') ?></dd>
+                            <dt>Управление</dt>
+                            <dd><?= htmlspecialchars($manageLabel) ?></dd>
                         </div>
 
                         <div>

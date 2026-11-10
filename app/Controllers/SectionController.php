@@ -21,23 +21,27 @@ class SectionController extends Controller
         $parentId = isset($_GET['parent']) ? (int)$_GET['parent'] : null;
 
         $data = [
-            'mode'            => 'create',
-            'item'            => [
-                'title'       => '',
-                'slug'        => '',
-                'description' => '',
-                'parent_id'   => $parentId,
-                'position'    => '',
-                'access'      => 'public',
-                'status'      => 'published',
+            'mode'             => 'create',
+            'item'             => [
+                'title'          => '',
+                'slug'           => '',
+                'description'    => '',
+                'parent_id'      => $parentId,
+                'position'       => '',
+                'view_role_id'   => '',
+                'create_role_id' => '1',
+                'reply_role_id'  => '1',
+                'manage_role_id' => '3',
+                'is_locked'      => 0,
+                'status'         => 'published',
             ],
-            'parentId'        => $parentId,
+            'parentId'         => $parentId,
             'categoryOptions'  => $this->service->getCategoryOptions(),
             'accessOptions'    => $this->service->accessOptions(),
             'audienceOptions'  => $this->service->audienceOptions(),
             'managedByOptions' => $this->service->managedByOptions(),
             'statusOptions'    => $this->service->statusOptions(),
-            'errors'          => [],
+            'errors'           => [],
         ];
 
         $this->title = 'Создать раздел | Модерация';
@@ -56,29 +60,35 @@ class SectionController extends Controller
         $result = $this->service->create($_POST);
 
         if (!$result['ok']) {
-            // Возвращаем форму с ошибками
             $parentId = isset($_POST['parent_id']) && $_POST['parent_id'] !== ''
                 ? (int)$_POST['parent_id']
                 : null;
 
             $data = [
-                'mode'            => 'create',
-                'item'            => [
-                    'title'       => trim($_POST['title'] ?? ''),
-                    'slug'        => trim($_POST['slug'] ?? ''),
-                    'description' => trim($_POST['description'] ?? ''),
-                    'parent_id'   => $parentId,
-                    'position'    => $_POST['position'] ?? '',
-                    'access'      => $_POST['access'] ?? 'public',
-                    'status'      => $_POST['status'] ?? 'published',
+                'mode'             => 'create',
+                'item'             => [
+                    'title'          => trim($_POST['title'] ?? ''),
+                    'slug'           => trim($_POST['slug'] ?? ''),
+                    'description'    => trim($_POST['description'] ?? ''),
+                    'parent_id'      => $parentId,
+                    'position'       => $_POST['position'] ?? '',
+                    'view_role_id'   => $_POST['view_role_id'] ?? '',
+                    'create_role_id' => $_POST['create_role_id'] ?? '',
+                    'reply_role_id'  => $_POST['reply_role_id'] ?? '',
+                    'manage_role_id' => $_POST['manage_role_id'] ?? '3',
+                    'is_locked'      => !empty($_POST['is_locked']) ? 1 : 0,
+                    'status'         => $_POST['status'] ?? 'published',
+                    'moderate_topics'  => !empty($_POST['moderate_topics']) ? 1 : 0,
+                    'allow_attachments'=> !empty($_POST['allow_attachments']) ? 1 : 0,
+                    'allow_guest_posts'=> !empty($_POST['allow_guest_posts']) ? 1 : 0,
                 ],
-                'parentId'        => $parentId,
-                'categoryOptions' => $this->service->getCategoryOptions(),
-                'accessOptions'   => $this->service->accessOptions(),
-                'statusOptions'   => $this->service->statusOptions(),
+                'parentId'         => $parentId,
+                'categoryOptions'  => $this->service->getCategoryOptions(),
+                'accessOptions'    => $this->service->accessOptions(),
                 'audienceOptions'  => $this->service->audienceOptions(),
                 'managedByOptions' => $this->service->managedByOptions(),
-                'errors'          => $result['errors'] ?? [],
+                'statusOptions'    => $this->service->statusOptions(),
+                'errors'           => $result['errors'] ?? [],
             ];
 
             $this->title = 'Создать раздел | Модерация';
@@ -92,7 +102,7 @@ class SectionController extends Controller
     public function edit(array $params = [])
     {
         $this->guard();
-        
+
         $id   = (int)($params['id'] ?? 0);
         $item = $this->service->find($id);
 
@@ -120,7 +130,7 @@ class SectionController extends Controller
     public function update(array $params = [])
     {
         $this->guard();
-        
+
         $id = (int)($params['id'] ?? 0);
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
@@ -132,15 +142,21 @@ class SectionController extends Controller
 
         if (!$result['ok']) {
             $item = $this->service->find($id) ?? [];
-            // Подставляем отправленные значения
             $item = array_merge($item, [
-                'title'       => trim($_POST['title'] ?? ''),
-                'slug'        => trim($_POST['slug'] ?? ''),
-                'description' => trim($_POST['description'] ?? ''),
-                'parent_id'   => ($_POST['parent_id'] ?? '') !== '' ? (int)$_POST['parent_id'] : null,
-                'position'    => $_POST['position'] ?? '',
-                'access'      => $_POST['access'] ?? 'public',
-                'status'      => $_POST['status'] ?? 'published',
+                'title'          => trim($_POST['title'] ?? ''),
+                'slug'           => trim($_POST['slug'] ?? ''),
+                'description'    => trim($_POST['description'] ?? ''),
+                'parent_id'      => ($_POST['parent_id'] ?? '') !== '' ? (int)$_POST['parent_id'] : null,
+                'position'       => $_POST['position'] ?? '',
+                'view_role_id'   => $_POST['view_role_id'] ?? '',
+                'create_role_id' => $_POST['create_role_id'] ?? '',
+                'reply_role_id'  => $_POST['reply_role_id'] ?? '',
+                'manage_role_id' => $_POST['manage_role_id'] ?? '3',
+                'is_locked'      => !empty($_POST['is_locked']) ? 1 : 0,
+                'status'         => $_POST['status'] ?? 'published',
+                'moderate_topics'  => !empty($_POST['moderate_topics']) ? 1 : 0,
+                'allow_attachments'=> !empty($_POST['allow_attachments']) ? 1 : 0,
+                'allow_guest_posts'=> !empty($_POST['allow_guest_posts']) ? 1 : 0,
             ]);
 
             $data = [
@@ -152,7 +168,7 @@ class SectionController extends Controller
                 'audienceOptions'  => $this->service->audienceOptions(),
                 'managedByOptions' => $this->service->managedByOptions(),
                 'statusOptions'    => $this->service->statusOptions(),
-                'errors'           => [],
+                'errors'           => $result['errors'] ?? [],
             ];
 
             $this->title = 'Редактировать раздел | Модерация';
@@ -166,7 +182,7 @@ class SectionController extends Controller
     public function delete(array $params = [])
     {
         $this->guard();
-        
+
         $id = (int)($params['id'] ?? 0);
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
@@ -174,10 +190,7 @@ class SectionController extends Controller
             exit;
         }
 
-        $result = $this->service->delete($id);
-
-        // Пока просто редиректим. Потом можно добавить flash-сообщение.
-        // if (!$result['ok']) { ... }
+        $this->service->delete($id);
 
         header('Location: ' . url('/moderation/sections'));
         exit;
