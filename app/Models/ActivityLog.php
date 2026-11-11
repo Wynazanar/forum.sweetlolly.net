@@ -338,8 +338,25 @@ class ActivityLog extends Model
 
             'manage_category'  => 'Управление разделом',
             'created_category' => 'Создание раздела',
+            'created_section'   => 'Создание раздела',
+            'updated_section'   => 'Редактирование раздела',
+            'deleted_section'   => 'Удаление раздела',
             'edited_category'  => 'Редактирование раздела',
             'deleted_category' => 'Удаление раздела',
+
+            'created_application_form'   => 'Создание шаблона заявки',
+            'updated_application_form'   => 'Изменение шаблона заявки',
+            'deleted_application_form'   => 'Удаление шаблона заявки',
+            'archived_application_form'  => 'Архивация шаблона заявки',
+            'submitted_application'      => 'Подача заявки',
+            'accepted_application'       => 'Принятие заявки',
+            'rejected_application'       => 'Отклонение заявки',
+            'created_application_layout' => 'Создание макета заявки',
+            'updated_application_layout' => 'Изменение макета заявки',
+            'deleted_application_layout' => 'Удаление макета заявки',
+            'created_role'               => 'Создание роли',
+            'updated_role'               => 'Изменение роли',
+            'deleted_role'               => 'Удаление роли',
         ];
 
         return $map[$action] ?? $action;

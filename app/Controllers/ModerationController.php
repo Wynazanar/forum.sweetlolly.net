@@ -23,7 +23,7 @@ class ModerationController extends Controller
             $this->deny();
         }
 
-        if (!AuthService::can('resolve_report') && !AuthService::hasRole('admin')) {
+        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::hasRole('admin')) {
             $this->deny();
         }
 
@@ -31,11 +31,12 @@ class ModerationController extends Controller
 
         // Все возможные табы + нужное право
         $allTabs = [
-            ['id' => 'overview',     'title' => 'Обзор',      'href' => url('/moderation/overview'),     'permission' => null],
-            ['id' => 'players',      'title' => 'Игроки',     'href' => url('/moderation/players'),      'permission' => 'ban_user'],
+            // ['id' => 'overview',     'title' => 'Обзор',      'href' => url('/moderation/overview'),     'permission' => null],
+            ['id' => 'players',      'title' => 'Игроки',     'href' => url('/moderation/players'),      'permission' => 'players.view'],
+            ['id' => 'roles',        'title' => 'Роли',       'href' => url('/moderation/roles'),        'permission' => 'manage_roles'],
             ['id' => 'complaints',   'title' => 'Жалобы',     'href' => url('/moderation/complaints'),   'permission' => 'resolve_report'],
             ['id' => 'reports',      'title' => 'Репорты',    'href' => url('/moderation/reports'),      'permission' => 'resolve_report'],
-            ['id' => 'applications', 'title' => 'Заявки',     'href' => url('/moderation/applications'), 'permission' => 'resolve_report'],
+            ['id' => 'applications', 'title' => 'Заявки',     'href' => url('/moderation/applications'), 'permission' => 'applications.view'],
             ['id' => 'sections',     'title' => 'Разделы',    'href' => url('/moderation/sections'),     'permission' => 'manage_categories'],
             ['id' => 'topics',       'title' => 'Темы',       'href' => url('/moderation/topics'),       'permission' => 'lock_thread'],
             ['id' => 'discussions',  'title' => 'Обсуждения', 'href' => url('/moderation/discussions'),  'permission' => 'edit_any_post'],
@@ -65,10 +66,12 @@ class ModerationController extends Controller
 
         // Данные конкретного таба
         match ($tab) {
-            'sections' => $this->handleSections($data),
-            'reports'  => $this->handleReports($data),
-            'logs'     => $this->handleLogs($data),
-            default    => null,
+            'sections'     => $this->handleSections($data),
+            'reports'      => $this->handleReports($data),
+            'logs'         => $this->handleLogs($data),
+            'applications' => $this->handleApplications($data),
+            'roles'        => $this->handleRoles($data),
+            default        => null,
         };
 
         return $this->render('moderation/index', $data);
@@ -188,6 +191,69 @@ class ModerationController extends Controller
                 'error'   => 'Ошибка',
             ],
         ];
+    }
+
+
+    // =========================================================
+    //  ЗАЯВКИ
+    // =========================================================
+    private function handleApplications(array &$data): void
+    {
+        $formService = new \App\Services\ApplicationFormService();
+        $appService  = new \App\Services\ApplicationService();
+
+        $sub = $_GET['sub'] ?? 'submissions';
+        if (!in_array($sub, ['submissions', 'forms'], true)) {
+            $sub = 'submissions';
+        }
+
+        $data['appTab']        = $sub;
+        $data['statusOptions'] = $formService->statusOptions();
+        $data['typeOptions']   = $formService->typeOptions();
+        $data['appStatusOpts'] = $appService->statusOptions();
+        $data['counts']        = $appService->countByStatus();
+
+        if ($sub === 'forms') {
+            $filters = [
+                'status' => $_GET['status'] ?? '',
+                'q'      => trim($_GET['q'] ?? ''),
+                'sub'    => 'forms',
+            ];
+            $data['forms']   = $formService->findAll([
+                'status' => $filters['status'],
+                'q'      => $filters['q'],
+            ]);
+            $data['filters'] = $filters;
+
+            if (!empty($_GET['id'])) {
+                $data['selected'] = $formService->find((int)$_GET['id']);
+            }
+        } else {
+            $filters = [
+                'status'  => $_GET['status'] ?? 'pending',
+                'form_id' => $_GET['form_id'] ?? '',
+                'q'       => trim($_GET['q'] ?? ''),
+                'sub'     => 'submissions',
+            ];
+            $data['applications'] = $appService->findAll([
+                'status'  => $filters['status'],
+                'form_id' => $filters['form_id'],
+                'q'       => $filters['q'],
+            ]);
+            $data['formsList'] = $formService->findAll(['status' => 'published']);
+            $data['filters']   = $filters;
+
+            if (!empty($_GET['id'])) {
+                $data['selected'] = $appService->find((int)$_GET['id']);
+            }
+        }
+    }
+
+
+    private function handleRoles(array &$data): void
+    {
+        $service = new \App\Services\RoleService();
+        $data['roles'] = $service->findAll();
     }
 
     private function deny(): void

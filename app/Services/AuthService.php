@@ -52,7 +52,26 @@ class AuthService
             $permissions = json_decode($permissions, true) ?: [];
         }
 
-        return !empty($permissions[$permission]);
+        if (!empty($permissions[$permission])) {
+            return true;
+        }
+
+        // Совместимость со старыми ключами, пока роли не обновлены в UI
+        $legacy = [
+            'applications.view'           => ['resolve_report'],
+            'applications.review'         => ['resolve_report'],
+            'applications.forms.manage'   => ['resolve_report', 'manage_categories'],
+            'applications.layouts.manage' => ['resolve_report', 'manage_categories'],
+            'players.view'                => ['ban_user'],
+            'players.edit_role'           => ['ban_user', 'manage_roles'],
+        ];
+        foreach ($legacy[$permission] ?? [] as $oldKey) {
+            if (!empty($permissions[$oldKey])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

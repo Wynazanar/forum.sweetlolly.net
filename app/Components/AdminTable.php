@@ -191,14 +191,47 @@ HTML;
             }
         }
 
+                // Сохраняем служебные параметры (sub и т.п.), которых нет в filterConfig
+        $configNames = [];
+        foreach ($this->filterConfig as $cfg) {
+            if (!empty($cfg['name'])) {
+                $configNames[$cfg['name']] = true;
+            }
+        }
+        $hiddenParts = [];
+        foreach ($this->filters as $fname => $fval) {
+            if (isset($configNames[$fname])) {
+                continue;
+            }
+            if ($fval === '' || $fval === null) {
+                continue;
+            }
+            $hiddenParts[] = sprintf(
+                '<input type="hidden" name="%s" value="%s">',
+                htmlspecialchars((string)$fname, ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars((string)$fval, ENT_QUOTES, 'UTF-8')
+            );
+        }
+        $hiddenHtml = implode("\n", $hiddenParts);
+
         $filtersHtml = implode("\n", $parts);
+
+        $resetParams = [];
+        foreach ($this->filters as $fname => $fval) {
+            if (!isset($configNames[$fname]) && $fval !== '' && $fval !== null) {
+                $resetParams[$fname] = $fval;
+            }
+        }
+        $resetQuery = $resetParams ? ('?' . http_build_query($resetParams)) : '';
+        $resetHref  = htmlspecialchars(url($this->baseUrl) . $resetQuery, ENT_QUOTES, 'UTF-8');
 
         return <<<HTML
 <form class="logs-filters" method="get" action="{$actionUrl}" id="admin-table-filters" data-auto-submit>
+    {$hiddenHtml}
     <div class="logs-filters-row">
         {$filtersHtml}
         <div class="filter-actions">
-            <a href="{$actionUrl}" class="btn btn-secondary">Сбросить</a>
+            <a href="{$resetHref}" class="btn btn-secondary">Сбросить</a>
         </div>
     </div>
 </form>
@@ -461,11 +494,8 @@ HTML;
     {
         $params = [];
 
-        // Все известные фильтры
-        foreach ($this->filterConfig as $cfg) {
-            $name = $cfg['name'] ?? null;
-            if ($name === null) continue;
-            $val = $this->filters[$name] ?? null;
+        // Все текущие фильтры (включая служебные вроде sub)
+        foreach ($this->filters as $name => $val) {
             if ($val !== null && $val !== '') {
                 $params[$name] = $val;
             }

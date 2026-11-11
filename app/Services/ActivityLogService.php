@@ -364,4 +364,146 @@ class ActivityLogService
             $comment
         );
     }
+
+    // -------------------------------------------------------------------------
+    // Заявки / шаблоны / макеты
+    // -------------------------------------------------------------------------
+
+    public static function applicationFormCreated(
+        int $userId,
+        int $formId,
+        string $name,
+        ?array $extra = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'created_application_form',
+            'success',
+            'application_form',
+            $formId,
+            $name,
+            $extra
+        );
+    }
+
+    public static function applicationFormUpdated(
+        int $userId,
+        int $formId,
+        string $name,
+        ?array $before = null,
+        ?array $after = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'updated_application_form',
+            'success',
+            'application_form',
+            $formId,
+            $name,
+            ['before' => $before, 'after' => $after]
+        );
+    }
+
+    public static function applicationFormDeleted(
+        int $userId,
+        int $formId,
+        string $name,
+        bool $archived = false
+    ): ?int {
+        return self::log(
+            $userId,
+            $archived ? 'archived_application_form' : 'deleted_application_form',
+            'success',
+            'application_form',
+            $formId,
+            $name
+        );
+    }
+
+    public static function applicationSubmitted(
+        int $userId,
+        int $applicationId,
+        int $formId,
+        string $formName
+    ): ?int {
+        return self::log(
+            $userId,
+            'submitted_application',
+            'success',
+            'application',
+            $applicationId,
+            $formName,
+            ['form_id' => $formId]
+        );
+    }
+
+    public static function applicationReviewed(
+        int $adminId,
+        int $applicationId,
+        string $formName,
+        string $status,
+        ?string $comment = null
+    ): ?int {
+        $action = $status === 'accepted' ? 'accepted_application' : 'rejected_application';
+        return self::log(
+            $adminId,
+            $action,
+            'success',
+            'application',
+            $applicationId,
+            $formName,
+            ['status' => $status],
+            $comment
+        );
+    }
+
+    public static function applicationLayoutCreated(
+        int $userId,
+        int $layoutId,
+        string $name,
+        ?array $extra = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'created_application_layout',
+            'success',
+            'application_layout',
+            $layoutId,
+            $name,
+            $extra
+        );
+    }
+
+    public static function applicationLayoutUpdated(
+        int $userId,
+        int $layoutId,
+        string $name,
+        ?array $before = null,
+        ?array $after = null
+    ): ?int {
+        return self::log(
+            $userId,
+            'updated_application_layout',
+            'success',
+            'application_layout',
+            $layoutId,
+            $name,
+            ['before' => $before, 'after' => $after]
+        );
+    }
+
+    public static function applicationLayoutDeleted(
+        int $userId,
+        int $layoutId,
+        string $name
+    ): ?int {
+        return self::log(
+            $userId,
+            'deleted_application_layout',
+            'success',
+            'application_layout',
+            $layoutId,
+            $name
+        );
+    }
 }
