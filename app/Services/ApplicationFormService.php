@@ -282,6 +282,24 @@ class ApplicationFormService
                 'rowSpan'     => max(1, min(20, (int)($q['rowSpan'] ?? 1))),
             ];
 
+            // Для file: допустимые расширения и лимит размера
+            if ($type === 'file') {
+                $accept = $q['accept'] ?? [];
+                if (is_string($accept)) {
+                    $accept = preg_split('~[,\s]+~', $accept) ?: [];
+                }
+                if (!is_array($accept)) {
+                    $accept = [];
+                }
+                $accept = array_values(array_filter(array_map(
+                    static fn($e) => strtolower(ltrim(trim((string)$e), '.')),
+                    $accept
+                )));
+                $item['accept'] = $accept; // [] = дефолтный безопасный список на сервере
+                $item['max_size'] = max(1, (int)($q['max_size'] ?? 10485760));
+            }
+
+
             if (in_array($type, ['select', 'radio', 'checkbox'], true)) {
                 $opts = $q['options'] ?? [];
                 if (is_string($opts)) {

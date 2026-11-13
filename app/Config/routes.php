@@ -4,6 +4,12 @@ use Core\Route;
 return [
     new Route('/', 'main', 'index'),
 
+    new Route('/login',        'auth', 'loginForm'),
+    new Route('/login/submit', 'auth', 'login'),
+    new Route('/logout',       'auth', 'logout'),
+
+    new Route('/attachments/:id/download', 'attachment', 'download'),
+
     new Route('/forums/:thread', 'thread', 'show'),
 
     // ===== Публичные заявки (для игроков) =====
@@ -11,7 +17,18 @@ return [
     new Route('/application/:id',           'application', 'publicShow'),
     new Route('/application/:id/submit',    'application', 'publicSubmit'),
 
+    // Кабинет игрока — заявки
+    new Route('/my/applications',                    'application', 'myList'),
+    new Route('/my/applications/:id',                'application', 'myShow'),
+    new Route('/my/applications/:id/reply',          'application', 'myReply'),
+    new Route('/my/applications/:id/withdraw',       'application', 'myWithdraw'),
+
+
+
+
+
     // ===== Applications (конкретные роуты ДО общего /moderation/:tab) =====
+    // список заявок → /moderation/:tab (ModerationController), чтобы была навигация
     new Route('/moderation/applications/create',             'application', 'create'),
     new Route('/moderation/applications/store',              'application', 'store'),
     new Route('/moderation/applications/edit/:id',           'application', 'edit'),

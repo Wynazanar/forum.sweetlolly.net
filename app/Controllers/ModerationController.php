@@ -12,11 +12,7 @@ class ModerationController extends Controller
 {
     public function index(array $params = [])
     {
-        // ===== ВРЕМЕННО: переключение аккаунта для тестов =====
-        AuthService::loginAs(1); // Admin
-        // AuthService::loginAs(2); // Moderator
-        // AuthService::loginAs(3); // Обычный пользователь
-        // ======================================================
+        // Тестовый loginAs убран — входите через /login
 
         // Не авторизован или обычный пользователь → на главную
         if (!AuthService::check()) {

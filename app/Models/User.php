@@ -65,6 +65,36 @@ class User extends Model
     /**
      * Пользователь + роль + permissions
      */
+    /**
+     * Поиск для логина: username или email (+ hash и роль)
+     */
+    public function findForAuth(string $login): ?array
+    {
+        $user = $this->findOne(
+            "SELECT 
+                u.id,
+                u.username,
+                u.email,
+                u.password_hash,
+                u.role_id,
+                u.is_banned,
+                u.ban_reason,
+                r.name AS role_name,
+                r.permissions
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE u.username = ? OR u.email = ?
+            LIMIT 1",
+            [$login, $login]
+        );
+
+        if ($user && is_string($user['permissions'] ?? null)) {
+            $user['permissions'] = json_decode($user['permissions'], true) ?: [];
+        }
+
+        return $user;
+    }
+
     public function findWithRole(int $id): ?array
     {
         $user = $this->findOne(
@@ -79,8 +109,11 @@ class User extends Model
             [$id]
         );
 
-        if ($user && is_string($user['permissions'])) {
-            $user['permissions'] = json_decode($user['permissions'], true) ?: [];
+        if ($user) {
+            if (is_string($user['permissions'] ?? null)) {
+                $user['permissions'] = json_decode($user['permissions'], true) ?: [];
+            }
+            unset($user['password_hash']);
         }
 
         return $user;

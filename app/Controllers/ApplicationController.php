@@ -205,52 +205,7 @@ class ApplicationController extends Controller
     //  ПОСТУПИВШИЕ ЗАЯВКИ (просмотр + review)
     // =========================================================
 
-    public function show(array $params = [])
-    {
-        $this->guardReview();
 
-        $id  = (int)($params['id'] ?? 0);
-        $app = $this->appService->find($id);
-
-        if (!$app) {
-            header('Location: ' . url('/moderation/applications?tab=submissions'));
-            exit;
-        }
-
-        $data = [
-            'application'   => $app,
-            'statusOptions' => $this->appService->statusOptions(),
-        ];
-
-        $this->title = 'Заявка #' . $id . ' | Модерация';
-        return $this->render('moderation/application_show', $data);
-    }
-
-    public function review(array $params = [])
-    {
-        $this->guardReview();
-
-        $id = (int)($params['id'] ?? 0);
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
-            header('Location: ' . url('/moderation/applications?tab=submissions'));
-            exit;
-        }
-
-        $status  = $_POST['status'] ?? '';
-        $comment = $_POST['admin_comment'] ?? null;
-
-        $result = $this->appService->review($id, $status, $comment);
-
-        if (!$result['ok']) {
-            // Можно flash-сообщение, пока просто редирект
-            header('Location: ' . url('/moderation/applications/show/' . $id));
-            exit;
-        }
-
-        header('Location: ' . url('/moderation/applications?tab=submissions'));
-        exit;
-    }
 
     // =========================================================
     //  МАКЕТЫ (базовый CRUD)
@@ -491,7 +446,8 @@ class ApplicationController extends Controller
             $answers = [];
         }
 
-        $result = $this->appService->submit($id, $answers, $userId);
+        $files = $_FILES['answers'] ?? [];
+        $result = $this->appService->submit($id, $answers, $userId, is_array($files) ? $files : []);
 
         $layout = null;
         if (!empty($form['layout_id'])) {
@@ -632,6 +588,160 @@ class ApplicationController extends Controller
         ];
     }
 
+
+    // =========================================================
+    //  РАССМОТРЕНИЕ (staff) — действия
+    // =========================================================
+
+    public function review(array $params = [])
+    {
+        $this->guardReview();
+        $id = (int)($params['id'] ?? 0);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
+            header('Location: ' . url('/moderation/applications'));
+            exit;
+        }
+
+        $action = $_POST['action'] ?? '';
+        $comment = trim($_POST['comment'] ?? $_POST['admin_comment'] ?? '');
+
+        if ($action === 'accept') {
+            $this->appService->review($id, 'accepted', $comment ?: null);
+        } elseif ($action === 'reject') {
+            $this->appService->review($id, 'rejected', $comment ?: null);
+        } elseif ($action === 'clarify') {
+            $user = AuthService::user();
+            $this->appService->requestClarification($id, $comment, (int)$user['id']);
+        } elseif ($action === 'message') {
+            $user = AuthService::user();
+            $internal = !empty($_POST['internal']);
+            $this->appService->staffReply($id, $comment, (int)$user['id'], $internal);
+        }
+
+        header('Location: ' . url('/moderation/applications/show/' . $id));
+        exit;
+    }
+
+    public function show(array $params = [])
+    {
+        $this->guardReview();
+
+        $id = (int)($params['id'] ?? 0);
+        $app = $this->appService->find($id);
+
+        if (!$app) {
+            header('Location: ' . url('/moderation/applications'));
+            exit;
+        }
+
+        $data = [
+            'application' => $app,
+            'messages'    => $this->appService->messages($id, true),
+            'statusOpts'  => $this->appService->statusOptions(),
+            'user'        => AuthService::user(),
+        ];
+
+        $this->title = ($app['form_name'] ?? 'Заявка') . ' #' . $id . ' | Модерация';
+        return $this->render('moderation/application_show', $data);
+    }
+
+    // =========================================================
+    //  КАБИНЕТ ИГРОКА
+    // =========================================================
+
+    public function myList(array $params = [])
+    {
+        if (!AuthService::check()) {
+            header('Location: ' . url('/login') . '?redirect=' . urlencode('/my/applications'));
+            exit;
+        }
+
+        $user = AuthService::user();
+        $data = [
+            'applications' => $this->appService->findForUser((int)$user['id']),
+            'statusOpts'   => $this->appService->statusOptions(),
+            'user'         => $user,
+        ];
+
+        $this->title = 'Мои заявки | SweetLolly Форум';
+        return $this->render('application/my_list', $data);
+    }
+
+    public function myShow(array $params = [])
+    {
+        if (!AuthService::check()) {
+            header('Location: ' . url('/login'));
+            exit;
+        }
+
+        $id = (int)($params['id'] ?? 0);
+        $user = AuthService::user();
+        $app = $this->appService->find($id);
+
+        if (!$app || (int)$app['user_id'] !== (int)$user['id']) {
+            header('Location: ' . url('/my/applications'));
+            exit;
+        }
+
+        $data = [
+            'application' => $app,
+            'messages'    => $this->appService->messages($id, false),
+            'statusOpts'  => $this->appService->statusOptions(),
+            'user'        => $user,
+            'errors'      => [],
+        ];
+
+        $this->title = ($app['form_name'] ?? 'Заявка') . ' | Мои заявки';
+        return $this->render('application/my_show', $data);
+    }
+
+    public function myReply(array $params = [])
+    {
+        if (!AuthService::check() || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . url('/my/applications'));
+            exit;
+        }
+
+        $id = (int)($params['id'] ?? 0);
+        $user = AuthService::user();
+        $body = trim($_POST['body'] ?? '');
+
+        $result = $this->appService->playerReply($id, $body, (int)$user['id']);
+
+        if (!$result['ok']) {
+            $app = $this->appService->find($id);
+            $data = [
+                'application' => $app,
+                'messages'    => $this->appService->messages($id, false),
+                'statusOpts'  => $this->appService->statusOptions(),
+                'user'        => $user,
+                'errors'      => $result['errors'] ?? [],
+            ];
+            $this->title = 'Заявка | Мои заявки';
+            return $this->render('application/my_show', $data);
+        }
+
+        header('Location: ' . url('/my/applications/' . $id));
+        exit;
+    }
+
+    public function myWithdraw(array $params = [])
+    {
+        if (!AuthService::check() || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . url('/my/applications'));
+            exit;
+        }
+
+        $id = (int)($params['id'] ?? 0);
+        $user = AuthService::user();
+        $this->appService->withdraw($id, (int)$user['id']);
+
+        header('Location: ' . url('/my/applications'));
+        exit;
+    }
+
+
     private function guard(): void
     {
         if (!AuthService::check() || (
@@ -677,5 +787,4 @@ class ApplicationController extends Controller
             exit;
         }
     }
-
-}
+    }

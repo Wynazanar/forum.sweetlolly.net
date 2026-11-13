@@ -357,6 +357,8 @@ class ActivityLog extends Model
             'created_role'               => 'Создание роли',
             'updated_role'               => 'Изменение роли',
             'deleted_role'               => 'Удаление роли',
+            'requested_application_info'  => 'Запрос уточнения по заявке',
+            'replied_application'         => 'Ответ по заявке',
         ];
 
         return $map[$action] ?? $action;

@@ -37,7 +37,7 @@ $forms          = $forms ?? [];
 $formsList      = $formsList ?? [];
 $selected       = $selected ?? null;
 ?>
-<link rel="stylesheet" href="<?= asset('styles/admin.css'); ?>">
+
 <main>
     <div class="container">
         <div class="page-header flex">
@@ -242,13 +242,13 @@ $selected       = $selected ?? null;
                                 Открыть полностью
                             </a>
 
-                            <?php if (($selected['status'] ?? '') === 'pending'): ?>
+                            <?php if (in_array($selected['status'] ?? '', ['pending', 'needs_info'], true)): ?>
                             <form method="post" action="<?= url('/moderation/applications/review/' . (int)$selected['id']) ?>" style="display:inline;">
-                                <input type="hidden" name="status" value="accepted">
+                                <input type="hidden" name="action" value="accept">
                                 <button type="submit" class="btn btn-primary" onclick="return confirm('Принять заявку?')">Принять</button>
                             </form>
                             <form method="post" action="<?= url('/moderation/applications/review/' . (int)$selected['id']) ?>" style="display:inline;">
-                                <input type="hidden" name="status" value="rejected">
+                                <input type="hidden" name="action" value="reject">
                                 <button type="submit" class="btn btn-outline btn-danger" onclick="return confirm('Отклонить заявку?')">Отклонить</button>
                             </form>
                             <?php endif; ?>

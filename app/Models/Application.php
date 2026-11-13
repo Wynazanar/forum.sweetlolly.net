@@ -110,8 +110,11 @@ class Application extends Model
 
         $rows = $this->findMany($sql, $params);
         $result = [
-            'pending'   => 0,
-            'accepted'  => 0,
+            'pending'    => 0,
+            'needs_info' => 0,
+            'accepted'   => 0,
+            'rejected'   => 0,
+            'withdrawn'  => 0,
             'rejected'  => 0,
             'cancelled' => 0,
             'total'     => 0,
@@ -178,7 +181,7 @@ class Application extends Model
     {
         $row = $this->findOne(
             "SELECT id FROM applications
-             WHERE form_id = ? AND user_id = ? AND status = 'pending'
+             WHERE form_id = ? AND user_id = ? AND status IN ('pending', 'needs_info')
              LIMIT 1",
             [$formId, $userId]
         );
@@ -205,5 +208,67 @@ class Application extends Model
             }
         }
         return $row;
+    }
+
+    public function findByUser(int $userId): array
+    {
+        $rows = $this->findMany(
+            "SELECT
+                a.id, a.form_id, a.user_id, a.answers, a.form_snapshot,
+                a.status, a.reviewed_by, a.reviewed_at, a.admin_comment,
+                a.created_at, a.updated_at,
+                f.name AS form_name,
+                f.application_type,
+                f.slug AS form_slug
+             FROM applications a
+             JOIN application_forms f ON f.id = a.form_id
+             WHERE a.user_id = ?
+             ORDER BY a.created_at DESC",
+            [$userId]
+        );
+
+        foreach ($rows as &$row) {
+            $row = $this->decodeJsonFields($row);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    public function setStatus(int $id, string $status, array $extra = []): bool
+    {
+        $fields = ['status = ?'];
+        $params = [$status];
+
+        if (array_key_exists('reviewed_by', $extra)) {
+            $fields[] = 'reviewed_by = ?';
+            $params[] = $extra['reviewed_by'];
+        }
+        if (array_key_exists('reviewed_at', $extra)) {
+            $fields[] = 'reviewed_at = ?';
+            $params[] = $extra['reviewed_at'];
+        }
+        if (array_key_exists('admin_comment', $extra)) {
+            $fields[] = 'admin_comment = ?';
+            $params[] = $extra['admin_comment'];
+        }
+
+        $params[] = $id;
+
+        $this->execute(
+            "UPDATE applications SET " . implode(', ', $fields) . " WHERE id = ?",
+            $params
+        );
+
+        return $this->affectedRows() >= 0;
+    }
+
+    public function updateAnswers(int $id, array $answers): bool
+    {
+        $this->execute(
+            "UPDATE applications SET answers = ? WHERE id = ?",
+            [json_encode($answers, JSON_UNESCAPED_UNICODE), $id]
+        );
+        return $this->affectedRows() >= 0;
     }
 }

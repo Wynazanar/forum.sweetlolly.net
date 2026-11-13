@@ -224,6 +224,9 @@ try {
 
     $sql[] = "CREATE TABLE IF NOT EXISTS attachments (
         id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        target_type VARCHAR(30) NOT NULL DEFAULT 'post',
+        target_id BIGINT UNSIGNED NULL,
+        field_key VARCHAR(100) NULL,
         post_id     BIGINT UNSIGNED NULL,
         user_id     BIGINT UNSIGNED NOT NULL,
         original_name VARCHAR(255) NOT NULL,
@@ -231,12 +234,25 @@ try {
         path        VARCHAR(500) NOT NULL,
         size        INT UNSIGNED NOT NULL,
         mime_type   VARCHAR(100) NOT NULL,
+        meta JSON NULL,
         created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         INDEX (post_id),
         INDEX (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    $sql[] = "UPDATE attachments
+        SET target_type = 'post', target_id = post_id
+        WHERE post_id IS NOT NULL AND (target_id IS NULL OR target_id = 0);
+
+        UPDATE attachments SET target_id = 0 WHERE target_id IS NULL;
+
+        ALTER TABLE attachments
+        MODIFY target_id BIGINT UNSIGNED NOT NULL;
+
+        ALTER TABLE attachments
+        ADD INDEX idx_attachments_target (target_type, target_id);";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS thread_reads (
         user_id         BIGINT UNSIGNED NOT NULL,
@@ -370,7 +386,8 @@ try {
         form_snapshot JSON NOT NULL,
 
         -- pending / accepted / rejected / cancelled
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending'
+            COMMENT 'pending|needs_info|accepted|rejected|withdrawn',
 
         reviewed_by INT UNSIGNED DEFAULT NULL,
         reviewed_at DATETIME DEFAULT NULL,
@@ -392,6 +409,21 @@ try {
             REFERENCES application_forms(id)
             ON DELETE RESTRICT
             ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+
+    $sql[] = "CREATE TABLE IF NOT EXISTS application_messages (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        application_id BIGINT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        body TEXT NOT NULL,
+        is_internal TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = только staff',
+        kind VARCHAR(30) NOT NULL DEFAULT 'message' COMMENT 'message|clarification|system',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_am_app (application_id),
+        INDEX idx_am_created (created_at),
+        CONSTRAINT fk_am_application
+            FOREIGN KEY (application_id) REFERENCES applications(id)
+            ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
     foreach ($sql as $query) {

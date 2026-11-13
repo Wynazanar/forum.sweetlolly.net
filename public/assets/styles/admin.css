@@ -196,7 +196,9 @@ input {
 
 .page-header a,
 .btn-form-primary,
-.btn-form-secondary {
+.btn-form-secondary,
+.btn-danger,
+.btn-success {
     background: var(--accent-deep);
     color: white;
     padding: 10px 14px;
@@ -211,6 +213,15 @@ input {
     color: var(--muted);
 }
 
+.btn-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.btn-success {
+    background: var(--success-bg);
+    color: var(--success);
+}
 
 
 
@@ -1160,4 +1171,92 @@ html.dark .log-role-admin,
         grid-column: 1 / -1 !important;
         grid-row: auto !important;
     }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.app-review {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .app-review {
+        grid-template-columns: 1fr;
+    }
+}
+
+.app-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+}
+
+.app-panel h3 {
+    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.ans-block {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--table-header);
+    border-radius: 8px;
+}
+
+.ans-block .q {
+    font-size: 12px;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.ans-block .a {
+    color: var(--muted);
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+
+.msg {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.msg-staff {
+    background: rgba(124, 92, 252, .12);
+}
+
+.msg-player {
+    background: rgba(255, 255, 255, .04);
+}
+
+.msg-system {
+    opacity: .75;
+    font-size: 12px;
+    border-left: 2px solid var(--border, #444);
+}
+
+.msg-internal {
+    border: 1px dashed #c9a227;
+}
+
+.msg .meta {
+    font-size: 11px;
+    color: var(--muted, #999);
+    margin-bottom: 4px;
 }

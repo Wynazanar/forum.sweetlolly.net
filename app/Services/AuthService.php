@@ -84,12 +84,54 @@ class AuthService
     }
 
     /**
-     * Войти под пользователем (для тестов / будущей авторизации)
+     * Вход по логину (username/email) и паролю.
+     * @return array{ok: bool, error?: string}
+     */
+    public static function attempt(string $login, string $password): array
+    {
+        $login = trim($login);
+        if ($login === '' || $password === '') {
+            return ['ok' => false, 'error' => 'Введите логин и пароль'];
+        }
+
+        $userModel = new User();
+        $row = $userModel->findForAuth($login);
+
+        if (!$row || empty($row['password_hash'])) {
+            return ['ok' => false, 'error' => 'Неверный логин или пароль'];
+        }
+
+        if (!password_verify($password, $row['password_hash'])) {
+            return ['ok' => false, 'error' => 'Неверный логин или пароль'];
+        }
+
+        if (!empty($row['is_banned'])) {
+            $reason = $row['ban_reason'] ?? '';
+            return [
+                'ok' => false,
+                'error' => 'Аккаунт заблокирован' . ($reason !== '' ? ': ' . $reason : ''),
+            ];
+        }
+
+        self::login((int)$row['id']);
+        return ['ok' => true];
+    }
+
+    /**
+     * Установить сессию по id
+     */
+    public static function login(int $userId): void
+    {
+        $_SESSION['user_id'] = $userId;
+        self::$user = null;
+    }
+
+    /**
+     * Войти под пользователем (только для локальных тестов)
      */
     public static function loginAs(int $userId): void
     {
-        $_SESSION['user_id'] = $userId;
-        self::$user = null; // сбрасываем кэш
+        self::login($userId);
     }
 
     /**
