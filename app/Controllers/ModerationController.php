@@ -67,6 +67,7 @@ class ModerationController extends Controller
             'logs'         => $this->handleLogs($data),
             'applications' => $this->handleApplications($data),
             'roles'        => $this->handleRoles($data),
+            'players'      => $this->handlePlayers($data),
             default        => null,
         };
 
@@ -250,6 +251,36 @@ class ModerationController extends Controller
     {
         $service = new \App\Services\RoleService();
         $data['roles'] = $service->findAll();
+    }
+
+
+    private function handlePlayers(array &$data): void
+    {
+        $service = new \App\Services\PlayerService();
+
+        $filters = [
+            'q'       => trim((string)($_GET['q'] ?? '')),
+            'role_id' => $_GET['role_id'] ?? '',
+            'banned'  => $_GET['banned'] ?? '',
+            'active'  => $_GET['active'] ?? '',
+        ];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $list = $service->list([
+            'q'       => $filters['q'],
+            'role_id' => $filters['role_id'] !== '' ? (int)$filters['role_id'] : null,
+            'banned'  => $filters['banned'] !== '' ? $filters['banned'] : null,
+            'active'  => $filters['active'] !== '' ? $filters['active'] : null,
+        ], $page, 20);
+
+        $data['players']     = $list['items'];
+        $data['total']       = $list['total'];
+        $data['page']        = $list['page'];
+        $data['pages']       = $list['pages'];
+        $data['filters']     = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
+        $data['roleOptions'] = $service->roleOptions();
+
+        $selectedId = (int)($_GET['id'] ?? 0);
+        $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
     }
 
     private function deny(): void

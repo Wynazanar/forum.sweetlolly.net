@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\Ban;
 
 class AuthService
 {
@@ -21,7 +22,13 @@ class AuthService
         }
 
         $userModel = new User();
-        self::$user = $userModel->findWithRole((int)$_SESSION['user_id']);
+        $uid = (int)$_SESSION['user_id'];
+        self::$user = $userModel->findWithRole($uid);
+
+        // last_seen: не чаще раза в 5 минут (не UPDATE на каждый хит)
+        if (self::$user) {
+            self::maybeTouchLastSeen($uid, self::$user['last_seen'] ?? null);
+        }
 
         return self::$user;
     }
@@ -62,8 +69,14 @@ class AuthService
             'applications.review'         => ['resolve_report'],
             'applications.forms.manage'   => ['resolve_report', 'manage_categories'],
             'applications.layouts.manage' => ['resolve_report', 'manage_categories'],
-            'players.view'                => ['ban_user'],
-            'players.edit_role'           => ['ban_user', 'manage_roles'],
+            'players.view'                => ['ban_user', 'players.edit_role'],
+            'players.create'              => ['players.edit_role', 'manage_roles'],
+            'players.edit'                => ['players.edit_role', 'ban_user'],
+            'players.edit_role'           => ['manage_roles', 'ban_user'],
+            'players.deactivate'          => ['ban_user', 'manage_roles'],
+            'players.ban'                 => ['ban_user'],
+            'players.mute'                => ['ban_user'],
+            'players.restrict'            => ['ban_user'],
         ];
         foreach ($legacy[$permission] ?? [] as $oldKey) {
             if (!empty($permissions[$oldKey])) {
@@ -105,15 +118,39 @@ class AuthService
             return ['ok' => false, 'error' => 'Неверный логин или пароль'];
         }
 
-        if (!empty($row['is_banned'])) {
-            $reason = $row['ban_reason'] ?? '';
-            return [
-                'ok' => false,
-                'error' => 'Аккаунт заблокирован' . ($reason !== '' ? ': ' . $reason : ''),
-            ];
+        $userId = (int)$row['id'];
+
+        // Просроченные наказания снимаем в момент логина (только этот user_id)
+        self::syncExpiredSanctions($userId);
+
+        // is_active — деактивация админом
+        if (array_key_exists('is_active', $row) && (int)$row['is_active'] === 0) {
+            return ['ok' => false, 'error' => 'Аккаунт деактивирован'];
         }
 
-        self::login((int)$row['id']);
+        // Актуальный бан (после sync)
+        $ban = (new Ban())->findActiveBan($userId);
+        if ($ban) {
+            $msg = 'Аккаунт заблокирован';
+            if (!empty($ban['reason'])) {
+                $msg .= ': ' . $ban['reason'];
+            }
+            if (!empty($ban['expires_at'])) {
+                $msg .= '. До: ' . $ban['expires_at'];
+            } else {
+                $msg .= ' (бессрочно)';
+            }
+            // подстрахуем флаг
+            (new User())->setBanned($userId, true, $ban['reason'] ?? null);
+            return ['ok' => false, 'error' => $msg];
+        }
+
+        // Бана нет — сбросить устаревший is_banned, если висел
+        if (!empty($row['is_banned'])) {
+            (new User())->setBanned($userId, false, null);
+        }
+
+        self::login($userId);
         return ['ok' => true];
     }
 
@@ -124,6 +161,7 @@ class AuthService
     {
         $_SESSION['user_id'] = $userId;
         self::$user = null;
+        (new User())->touchLastSeen($userId);
     }
 
     /**
@@ -141,5 +179,34 @@ class AuthService
     {
         unset($_SESSION['user_id']);
         self::$user = null;
+    }
+
+    /**
+     * Снять просроченные sanctions у одного пользователя + синхронизировать is_banned
+     */
+    public static function syncExpiredSanctions(int $userId): void
+    {
+        (new Ban())->expireOverdueForUser($userId);
+    }
+
+    /**
+     * Обновить last_seen, если прошло ≥ 5 минут с последнего значения
+     */
+    private static function maybeTouchLastSeen(int $userId, ?string $lastSeen): void
+    {
+        $need = true;
+        if ($lastSeen) {
+            $ts = strtotime($lastSeen);
+            if ($ts !== false && (time() - $ts) < 300) {
+                $need = false;
+            }
+        }
+        if (!$need) {
+            return;
+        }
+        (new User())->touchLastSeen($userId);
+        if (self::$user !== null) {
+            self::$user['last_seen'] = date('Y-m-d H:i:s');
+        }
     }
 }

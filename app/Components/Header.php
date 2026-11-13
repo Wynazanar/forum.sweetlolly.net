@@ -23,8 +23,6 @@ class Header
         }
         $loggedIn = isset($user);
 
-        // var_dump($isAdminBtnVisible);
-
         ob_start();
         ?>
         <link rel="stylesheet" href="<?= asset('styles/header.css'); ?>">

@@ -25,12 +25,23 @@ return [
     'moderation' => [
         'label' => 'Модерация',
         'permissions' => [
-            'resolve_report'     => 'Разбирать репорты / жалобы',
-            'ban_user'           => 'Банить игроков',
-            'players.view'       => 'Смотреть список игроков',
-            'players.edit_role'  => 'Менять роль игрока',
-            'view_logs'          => 'Смотреть логи',
-            'manage_categories'  => 'Управлять разделами форума',
+            'resolve_report'    => 'Разбирать репорты / жалобы',
+            'ban_user'          => 'Банить игроков (legacy)',
+            'view_logs'         => 'Смотреть логи',
+            'manage_categories' => 'Управлять разделами форума',
+        ],
+    ],
+    'players' => [
+        'label' => 'Игроки',
+        'permissions' => [
+            'players.view'       => 'Смотреть список и карточки',
+            'players.create'     => 'Создавать аккаунты',
+            'players.edit'       => 'Редактировать профиль (ник, email)',
+            'players.edit_role'  => 'Менять роль',
+            'players.deactivate' => 'Деактивировать / активировать аккаунт',
+            'players.ban'        => 'Бан / снять бан',
+            'players.mute'       => 'Мут / снять мут',
+            'players.restrict'   => 'Прочие ограничения',
         ],
     ],
     'applications' => [

@@ -426,6 +426,18 @@ try {
             ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
+    $sql[] = "ALTER TABLE users
+        ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER is_banned;
+
+        ALTER TABLE users
+        ADD INDEX idx_users_active (is_active);";
+
+    $sql[] = "ALTER TABLE bans
+        ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'ban' AFTER reason;
+
+        ALTER TABLE bans
+        ADD INDEX idx_bans_type (user_id, type, is_active);";
+
     foreach ($sql as $query) {
         $pdo->exec($query);
     }

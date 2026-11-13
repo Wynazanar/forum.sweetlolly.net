@@ -359,6 +359,14 @@ class ActivityLog extends Model
             'deleted_role'               => 'Удаление роли',
             'requested_application_info'  => 'Запрос уточнения по заявке',
             'replied_application'         => 'Ответ по заявке',
+            'created_player'              => 'Создание игрока',
+            'updated_player'              => 'Изменение игрока',
+            'deactivated_player'          => 'Деактивация игрока',
+            'activated_player'            => 'Активация игрока',
+            'muted_user'                  => 'Мут игрока',
+            'unmuted_user'                => 'Снятие мута',
+            'restricted_user'             => 'Ограничение игрока',
+            'unrestricted_user'           => 'Снятие ограничения',
         ];
 
         return $map[$action] ?? $action;

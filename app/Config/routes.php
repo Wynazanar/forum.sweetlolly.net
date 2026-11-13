@@ -43,6 +43,16 @@ return [
     new Route('/moderation/applications/layouts/update/:id', 'application', 'layoutUpdate'),
     new Route('/moderation/applications/layouts/delete/:id', 'application', 'layoutDelete'),
 
+    // Players
+    new Route('/moderation/players/create',          'player', 'create'),
+    new Route('/moderation/players/store',           'player', 'store'),
+    new Route('/moderation/players/edit/:id',        'player', 'edit'),
+    new Route('/moderation/players/update/:id',      'player', 'update'),
+    new Route('/moderation/players/punish/:id',      'player', 'punish'),
+    new Route('/moderation/players/revoke/:id',      'player', 'revoke'),
+    new Route('/moderation/players/deactivate/:id',  'player', 'deactivate'),
+
+
     // Roles
     new Route('/moderation/roles/create',     'role', 'create'),
     new Route('/moderation/roles/store',      'role', 'store'),

@@ -79,6 +79,7 @@ class User extends Model
                 u.role_id,
                 u.is_banned,
                 u.ban_reason,
+                u.is_active,
                 r.name AS role_name,
                 r.permissions
             FROM users u
@@ -117,5 +118,138 @@ class User extends Model
         }
 
         return $user;
+    }
+
+    /**
+     * Список для админки с пагинацией
+     * @return array{items: array, total: int, page: int, pages: int}
+     */
+    public function findAdminList(array $filters = [], int $page = 1, int $perPage = 20): array
+    {
+        $page = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+        $offset = ($page - 1) * $perPage;
+
+        $where = [];
+        $params = [];
+
+        if (!empty($filters['q'])) {
+            $q = '%' . $filters['q'] . '%';
+            $where[] = '(u.username LIKE ? OR u.email LIKE ? OR CAST(u.id AS CHAR) = ?)';
+            $params[] = $q;
+            $params[] = $q;
+            $params[] = $filters['q'];
+        }
+
+        if (!empty($filters['role_id'])) {
+            $where[] = 'u.role_id = ?';
+            $params[] = (int)$filters['role_id'];
+        }
+
+        if (isset($filters['banned']) && $filters['banned'] !== '' && $filters['banned'] !== null) {
+            if ($filters['banned'] === '1' || $filters['banned'] === 1) {
+                $where[] = 'u.is_banned = 1';
+            } elseif ($filters['banned'] === '0' || $filters['banned'] === 0) {
+                $where[] = 'u.is_banned = 0';
+            }
+        }
+
+        if (isset($filters['active']) && $filters['active'] !== '' && $filters['active'] !== null) {
+            if ($filters['active'] === '1' || $filters['active'] === 1) {
+                $where[] = 'COALESCE(u.is_active, 1) = 1';
+            } elseif ($filters['active'] === '0' || $filters['active'] === 0) {
+                $where[] = 'u.is_active = 0';
+            }
+        }
+
+        $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+        $countRow = $this->findOne(
+            "SELECT COUNT(*) AS cnt
+             FROM users u
+             $whereSql",
+            $params
+        );
+        $total = (int)($countRow['cnt'] ?? 0);
+        $pages = max(1, (int)ceil($total / $perPage));
+
+        $items = $this->findMany(
+            "SELECT
+                u.id, u.username, u.email, u.avatar, u.role_id,
+                u.posts_count, u.created_at, u.last_seen,
+                u.is_banned, u.ban_reason, u.is_active,
+                r.name AS role_name
+             FROM users u
+             JOIN roles r ON r.id = u.role_id
+             $whereSql
+             ORDER BY u.id DESC
+             LIMIT $perPage OFFSET $offset",
+            $params
+        );
+
+        return [
+            'items' => $items,
+            'total' => $total,
+            'page'  => $page,
+            'pages' => $pages,
+        ];
+    }
+
+    public function updateProfile(int $id, array $data): bool
+    {
+        $fields = [];
+        $params = [];
+        foreach (['username', 'email', 'avatar', 'role_id'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $fields[] = "$key = ?";
+                $params[] = $data[$key];
+            }
+        }
+        if (!$fields) {
+            return false;
+        }
+        $params[] = $id;
+        $this->execute(
+            "UPDATE users SET " . implode(', ', $fields) . " WHERE id = ?",
+            $params
+        );
+        return $this->affectedRows() >= 0;
+    }
+
+    public function setBanned(int $id, bool $banned, ?string $reason = null): bool
+    {
+        $this->execute(
+            "UPDATE users SET is_banned = ?, ban_reason = ? WHERE id = ?",
+            [$banned ? 1 : 0, $reason, $id]
+        );
+        return $this->affectedRows() >= 0;
+    }
+
+    public function createUser(string $username, string $email, string $passwordHash, int $roleId = 1): int
+    {
+        $this->execute(
+            "INSERT INTO users (username, email, password_hash, role_id)
+             VALUES (?, ?, ?, ?)",
+            [$username, $email, $passwordHash, $roleId]
+        );
+        return (int)$this->lastInsertId();
+    }
+
+    public function setActive(int $id, bool $active): bool
+    {
+        $this->execute(
+            "UPDATE users SET is_active = ? WHERE id = ?",
+            [$active ? 1 : 0, $id]
+        );
+        return $this->affectedRows() >= 0;
+    }
+
+    public function touchLastSeen(int $id): bool
+    {
+        $this->execute(
+            "UPDATE users SET last_seen = NOW() WHERE id = ?",
+            [$id]
+        );
+        return $this->affectedRows() >= 0;
     }
 }
