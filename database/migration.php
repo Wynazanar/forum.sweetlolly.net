@@ -113,8 +113,12 @@ try {
         user_id         BIGINT UNSIGNED NOT NULL,
         title           VARCHAR(255) NOT NULL,
         slug            VARCHAR(255) NOT NULL,
+        -- закреп / закрыта / скрыта (модерация)
         is_sticky       TINYINT(1) NOT NULL DEFAULT 0,
         is_locked       TINYINT(1) NOT NULL DEFAULT 0,
+        is_hidden       TINYINT(1) NOT NULL DEFAULT 0,
+        -- draft | pending | published | rejected
+        status          VARCHAR(20) NOT NULL DEFAULT 'published',
         views           INT UNSIGNED NOT NULL DEFAULT 0,
         posts_count     INT UNSIGNED NOT NULL DEFAULT 1,
         last_post_id    BIGINT UNSIGNED NULL,
@@ -123,9 +127,12 @@ try {
         updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        INDEX (category_id, is_sticky, last_post_at),
-        INDEX (user_id),
-        INDEX (slug)
+        INDEX idx_threads_cat_sticky (category_id, is_sticky, last_post_at),
+        INDEX idx_threads_user (user_id),
+        UNIQUE INDEX idx_threads_slug (slug),
+        INDEX idx_threads_locked (is_locked),
+        INDEX idx_threads_hidden (is_hidden),
+        INDEX idx_threads_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS posts (
@@ -136,6 +143,8 @@ try {
         content         MEDIUMTEXT NOT NULL,
         content_html    MEDIUMTEXT NULL,
         is_first        TINYINT(1) NOT NULL DEFAULT 0,
+        status          VARCHAR(20) NOT NULL DEFAULT 'published',
+        content_blocks  JSON NULL,
         created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at      TIMESTAMP NULL,
         edited_by       BIGINT UNSIGNED NULL,

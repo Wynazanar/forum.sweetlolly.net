@@ -77,12 +77,29 @@ class Post extends Model
     /**
      * Создание нового поста (обычного или ответа на другой пост)
      */
-    public function createPost(int $threadId, int $userId, string $content, ?int $replyToPostId = null): int
-    {
+    public function createPost(
+        int $threadId,
+        int $userId,
+        string $content,
+        ?int $replyToPostId = null,
+        ?array $contentBlocks = null,
+        ?string $contentHtml = null,
+        string $status = 'published',
+        bool $isFirst = false
+    ): int {
         $this->execute(
-            "INSERT INTO posts (thread_id, user_id, reply_to_post_id, content, is_first, created_at)
-             VALUES (?, ?, ?, ?, 0, NOW())",
-            [$threadId, $userId, $replyToPostId, $content]
+            "INSERT INTO posts (thread_id, user_id, reply_to_post_id, content, content_html, content_blocks, is_first, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+            [
+                $threadId,
+                $userId,
+                $replyToPostId,
+                $content,
+                $contentHtml,
+                $contentBlocks !== null ? json_encode($contentBlocks, JSON_UNESCAPED_UNICODE) : null,
+                $isFirst ? 1 : 0,
+                $status,
+            ]
         );
 
         $postId = (int) $this->lastInsertId();
@@ -105,5 +122,40 @@ class Post extends Model
         );
 
         return $postId;
+    }
+
+    public function findFirstByThreadId(int $threadId): ?array
+    {
+        return $this->findOne(
+            "SELECT * FROM posts
+             WHERE thread_id = ? AND is_first = 1
+             ORDER BY id ASC
+             LIMIT 1",
+            [$threadId]
+        ) ?: $this->findOne(
+            "SELECT * FROM posts WHERE thread_id = ? ORDER BY id ASC LIMIT 1",
+            [$threadId]
+        );
+    }
+
+    public function updateContent(int $postId, string $content, array $blocks, string $html, string $status = 'published'): bool
+    {
+        $this->execute(
+            "UPDATE posts SET
+                content = ?,
+                content_html = ?,
+                content_blocks = ?,
+                status = ?,
+                updated_at = NOW()
+             WHERE id = ?",
+            [
+                $content,
+                $html,
+                json_encode($blocks, JSON_UNESCAPED_UNICODE),
+                $status,
+                $postId,
+            ]
+        );
+        return true;
     }
 }

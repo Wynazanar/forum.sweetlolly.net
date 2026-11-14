@@ -158,7 +158,7 @@
             total: (int)($total ?? count($flatItems)),
             pages: (int)($totalPages ?? 1),
             filters: $filters ?? [],
-            // filterConfig: $filterConfig,
+            filterConfig: $filterConfig,
             emptyText: 'Разделов пока нет',
             rowClass: function (array $row) use ($selected) {
                 $classes = [];

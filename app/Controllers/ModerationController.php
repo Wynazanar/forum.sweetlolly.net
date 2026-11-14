@@ -19,7 +19,7 @@ class ModerationController extends Controller
             $this->deny();
         }
 
-        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::hasRole('admin')) {
+        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::can('lock_thread') && !AuthService::can('players.view') && !AuthService::hasRole('admin')) {
             $this->deny();
         }
 
@@ -68,6 +68,7 @@ class ModerationController extends Controller
             'applications' => $this->handleApplications($data),
             'roles'        => $this->handleRoles($data),
             'players'      => $this->handlePlayers($data),
+            'topics'       => $this->handleTopics($data),
             default        => null,
         };
 
@@ -278,6 +279,43 @@ class ModerationController extends Controller
         $data['pages']       = $list['pages'];
         $data['filters']     = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
         $data['roleOptions'] = $service->roleOptions();
+
+        $selectedId = (int)($_GET['id'] ?? 0);
+        $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
+    }
+
+    private function handleTopics(array &$data): void
+    {
+        $service = new \App\Services\ThreadService();
+
+        $filters = [
+            'q'           => trim((string)($_GET['q'] ?? '')),
+            'category_id' => $_GET['category_id'] ?? '',
+            'locked'      => $_GET['locked'] ?? '',
+            'sticky'      => $_GET['sticky'] ?? '',
+            'hidden'      => $_GET['hidden'] ?? '',
+        ];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+
+        $viewerId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
+
+        $list = $service->list([
+            'q'           => $filters['q'],
+            'category_id' => $filters['category_id'] !== '' ? (int)$filters['category_id'] : null,
+            'locked'      => $filters['locked'] !== '' ? $filters['locked'] : null,
+            'sticky'      => $filters['sticky'] !== '' ? $filters['sticky'] : null,
+            'hidden'      => $filters['hidden'] !== '' ? $filters['hidden'] : null,
+            'show_hidden' => $filters['hidden'] !== '',
+            'viewer_id'   => $viewerId,
+            'status'      => $_GET['status'] ?? null,
+        ], $page, 20);
+
+        $data['topics']          = $list['items'];
+        $data['total']           = $list['total'];
+        $data['page']            = $list['page'];
+        $data['pages']           = $list['pages'];
+        $data['filters']         = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
+        $data['categoryOptions'] = $service->categoryOptions();
 
         $selectedId = (int)($_GET['id'] ?? 0);
         $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;

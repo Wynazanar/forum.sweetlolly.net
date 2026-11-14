@@ -288,15 +288,13 @@ HTML;
         $html = '<option value="">' . htmlspecialchars($emptyLabel, ENT_QUOTES, 'UTF-8') . '</option>';
 
         foreach ($items as $key => $item) {
-            // Поддержка: ['value' => 'label'] или [['id'=>1,'name'=>'...']] или список строк
+            // Поддержка: [id => 'label'] | ['status' => 'Новый'] | [['id'=>1,'name'=>'...']]
+            // Числовые ключи (0/1, category_id) тоже value — иначе в URL уходят подписи
             if (is_array($item)) {
                 $value = (string)($item['value'] ?? $item['id'] ?? $key);
                 $label = (string)($item['label'] ?? $item['name'] ?? $value);
-            } elseif (is_string($key) && !is_numeric($key)) {
-                $value = (string)$key;
-                $label = (string)$item;
             } else {
-                $value = (string)$item;
+                $value = (string)$key;
                 $label = (string)$item;
             }
 

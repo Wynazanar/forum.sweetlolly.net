@@ -104,6 +104,15 @@ class Section extends Model
             });
         }
 
+        // Фильтр по категории (id родительской категории)
+        if (!empty($filters['category_id'])) {
+            $wantId = (int)$filters['category_id'];
+            $categories = array_filter(
+                $categories,
+                static fn($cat) => (int)($cat['id'] ?? 0) === $wantId
+            );
+        }
+
         return array_values($categories);
     }
 

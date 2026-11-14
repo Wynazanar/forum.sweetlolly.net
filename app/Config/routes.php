@@ -8,9 +8,11 @@ return [
     new Route('/login/submit', 'auth', 'login'),
     new Route('/logout',       'auth', 'logout'),
 
+    new Route('/attachments/upload', 'attachment', 'upload'),
     new Route('/attachments/:id/download', 'attachment', 'download'),
 
     new Route('/forums/:thread', 'thread', 'show'),
+    new Route('/forums/:thread/reply', 'thread', 'reply'),
 
     // ===== Публичные заявки (для игроков) =====
     new Route('/applications',              'application', 'publicList'),
@@ -59,6 +61,16 @@ return [
     new Route('/moderation/roles/edit/:id',   'role', 'edit'),
     new Route('/moderation/roles/update/:id', 'role', 'update'),
     new Route('/moderation/roles/delete/:id', 'role', 'delete'),
+
+    // Topics
+    new Route('/moderation/topics/create',       'topic', 'create'),
+    new Route('/moderation/topics/store',        'topic', 'store'),
+    new Route('/moderation/topics/edit/:id',     'topic', 'edit'),
+    new Route('/moderation/topics/update/:id',   'topic', 'update'),
+    new Route('/moderation/topics/lock/:id',     'topic', 'lock'),
+    new Route('/moderation/topics/sticky/:id',   'topic', 'sticky'),
+    new Route('/moderation/topics/move/:id',     'topic', 'move'),
+    new Route('/moderation/topics/hide/:id',     'topic', 'hide'),
 
     // Sections
     new Route('/moderation/sections/create',     'section', 'create'),

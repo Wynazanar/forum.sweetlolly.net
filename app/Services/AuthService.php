@@ -148,6 +148,7 @@ class AuthService
         // Бана нет — сбросить устаревший is_banned, если висел
         if (!empty($row['is_banned'])) {
             (new User())->setBanned($userId, false, null);
+            
         }
 
         self::login($userId);
