@@ -140,8 +140,13 @@ class PlayerController extends Controller
             $expires = substr($expires, 0, 19);
         }
 
-        $this->service->punish($id, $type, $reason, $expires, (int)$actor['id']);
-        header('Location: ' . url('/moderation/players') . '?id=' . $id);
+        $result = $this->service->punish($id, $type, $reason, $expires, (int)$actor['id']);
+        $q = '?id=' . $id;
+        if (empty($result['ok'])) {
+            $msg = $result['errors']['rank'] ?? $result['errors']['reason'] ?? 'Ошибка';
+            $q .= '&error=' . rawurlencode($msg);
+        }
+        header('Location: ' . url('/moderation/players') . $q);
         exit;
     }
 
@@ -162,8 +167,13 @@ class PlayerController extends Controller
         $this->requirePerm($perm);
 
         $actor = AuthService::user();
-        $this->service->revokeSanction($id, $type, (int)$actor['id']);
-        header('Location: ' . url('/moderation/players') . '?id=' . $id);
+        $result = $this->service->revokeSanction($id, $type, (int)$actor['id']);
+        $q = '?id=' . $id;
+        if (empty($result['ok'])) {
+            $msg = $result['errors']['rank'] ?? 'Ошибка';
+            $q .= '&error=' . rawurlencode($msg);
+        }
+        header('Location: ' . url('/moderation/players') . $q);
         exit;
     }
 
@@ -177,8 +187,13 @@ class PlayerController extends Controller
         }
         $actor = AuthService::user();
         $active = !empty($_POST['active']);
-        $this->service->setActive($id, $active, (int)$actor['id']);
-        header('Location: ' . url('/moderation/players') . '?id=' . $id);
+        $result = $this->service->setActive($id, $active, (int)$actor['id']);
+        $q = '?id=' . $id;
+        if (empty($result['ok'])) {
+            $msg = $result['errors']['rank'] ?? 'Ошибка';
+            $q .= '&error=' . rawurlencode($msg);
+        }
+        header('Location: ' . url('/moderation/players') . $q);
         exit;
     }
 

@@ -7,6 +7,7 @@ use App\Models\Section;
 use App\Services\AuthService;
 use App\Services\ActivityLogService;
 use App\Services\ContentBlocksService;
+use App\Services\ContentModerationService;
 
 class ThreadService
 {
@@ -91,10 +92,19 @@ class ThreadService
         $plainJoined = $this->blocksToPlain($blocks);
         $html = $blocksSvc->toHtml($blocks);
 
-        // draft | published (pending — этап модерации контента)
-        $status = ($input['action'] ?? '') === 'draft' ? 'draft' : 'published';
-        if (!empty($input['status']) && in_array($input['status'], ['draft', 'published', 'pending'], true)) {
-            $status = $input['status'];
+        // draft | published | pending (автомодерация)
+        $action = $input['action'] ?? 'publish';
+        if ($action === 'draft') {
+            $status = 'draft';
+            $modReasons = [];
+        } else {
+            $canBypass = AuthService::can('threads.publish')
+                || AuthService::can('lock_thread')
+                || AuthService::hasRole('admin');
+            $mod = new ContentModerationService();
+            $check = $mod->checkBlocks($blocks);
+            $modReasons = $check['reasons'];
+            $status = ($canBypass || $check['ok']) ? 'published' : 'pending';
         }
         $data['status'] = $status;
 
@@ -120,7 +130,12 @@ class ThreadService
             $data['title']
         );
 
-        return ['ok' => true, 'id' => $id];
+        return [
+            'ok' => true,
+            'id' => $id,
+            'status' => $status,
+            'moderation_reasons' => $modReasons ?? [],
+        ];
     }
 
     public function update(int $id, array $input): array
@@ -140,19 +155,6 @@ class ThreadService
             $data['slug'] = $old['slug'];
         }
 
-        if (!empty($input['action']) && $input['action'] === 'draft') {
-            $data['status'] = 'draft';
-        } elseif (!empty($input['action']) && $input['action'] === 'publish') {
-            $data['status'] = 'published';
-        } elseif (!empty($input['status'])) {
-            $data['status'] = $input['status'];
-        } else {
-            $data['status'] = $old['status'] ?? 'published';
-        }
-
-        $this->threads->updateThread($id, $data);
-
-        // Обновить первый пост (блоки)
         $blocksSvc = new ContentBlocksService();
         $blocks = $blocksSvc->normalize($input['content_blocks'] ?? null);
         if ($blocks === []) {
@@ -161,12 +163,36 @@ class ThreadService
                 $blocks = $blocksSvc->fromPlainText($plain);
             }
         }
+
+        $modReasons = [];
+        if (!empty($input['action']) && $input['action'] === 'draft') {
+            $data['status'] = 'draft';
+        } elseif (!empty($input['action']) && $input['action'] === 'publish') {
+            $canBypass = AuthService::can('threads.publish')
+                || AuthService::can('lock_thread')
+                || AuthService::hasRole('admin');
+            $mod = new ContentModerationService();
+            $check = $mod->checkBlocks($blocks);
+            $modReasons = $check['reasons'];
+            $data['status'] = ($canBypass || $check['ok']) ? 'published' : 'pending';
+        } elseif (!empty($input['status'])) {
+            $data['status'] = $input['status'];
+        } else {
+            $data['status'] = $old['status'] ?? 'published';
+        }
+
+        $this->threads->updateThread($id, $data);
+
         if ($blocks !== []) {
             $plainJoined = $this->blocksToPlain($blocks);
             $html = $blocksSvc->toHtml($blocks);
             $postModel = new Post();
             $first = $postModel->findFirstByThreadId($id);
-            $postStatus = ($data['status'] ?? 'published') === 'draft' ? 'draft' : 'published';
+            $postStatus = match ($data['status'] ?? 'published') {
+                'draft' => 'draft',
+                'pending' => 'pending',
+                default => 'published',
+            };
             if ($first) {
                 $postModel->updateContent((int)$first['id'], $plainJoined, $blocks, $html, $postStatus);
             } else {
@@ -187,6 +213,41 @@ class ThreadService
             );
         }
 
+        return ['ok' => true, 'status' => $data['status'] ?? null, 'moderation_reasons' => $modReasons];
+    }
+
+    public function setStatus(int $id, string $status, int $actorId): array
+    {
+        if (!in_array($status, ['published', 'pending', 'rejected', 'draft'], true)) {
+            return ['ok' => false, 'errors' => ['status' => 'Неверный статус']];
+        }
+        $t = $this->threads->findById($id);
+        if (!$t) {
+            return ['ok' => false, 'errors' => ['id' => 'Не найдено']];
+        }
+        $this->threads->updateThread($id, [
+            'category_id' => $t['category_id'],
+            'title'       => $t['title'],
+            'slug'        => $t['slug'],
+            'is_sticky'   => !empty($t['is_sticky']),
+            'is_locked'   => !empty($t['is_locked']),
+            'is_hidden'   => !empty($t['is_hidden']),
+            'status'      => $status,
+        ]);
+        $first = (new Post())->findFirstByThreadId($id);
+        if ($first) {
+            $postStatus = $status === 'draft' ? 'draft' : ($status === 'pending' ? 'pending' : ($status === 'rejected' ? 'rejected' : 'published'));
+            (new Post())->updateContent(
+                (int)$first['id'],
+                (string)($first['content'] ?? ''),
+                is_string($first['content_blocks'] ?? null)
+                    ? (json_decode($first['content_blocks'], true) ?: [])
+                    : (array)($first['content_blocks'] ?? []),
+                (string)($first['content_html'] ?? ''),
+                $postStatus
+            );
+        }
+        ActivityLogService::log($actorId, 'moderated_thread', 'success', 'thread', $id, $t['title'], ['status' => $status]);
         return ['ok' => true];
     }
 
@@ -262,6 +323,33 @@ class ThreadService
             );
         }
         return ['ok' => true];
+    }
+
+
+    /**
+     * Можно ли модерировать тему (проверка иерархии относительно автора темы).
+     * Для своих тем — разрешено; для чужих — только если актор выше автора по роли.
+     */
+    public function canActOn(int $actorId, int $threadId): bool
+    {
+        if ($actorId <= 0 || $threadId <= 0) {
+            return false;
+        }
+
+        $thread = $this->threads->findById($threadId);
+        if (!$thread) {
+            return false;
+        }
+
+        $authorId = (int)($thread['user_id'] ?? 0);
+        if ($authorId <= 0) {
+            return true; // нет автора — не блокируем
+        }
+        if ($actorId === $authorId) {
+            return true; // своя тема
+        }
+
+        return (new RoleHierarchyService())->canActOnUser($actorId, $authorId)['ok'] === true;
     }
 
     private function blocksToPlain(array $blocks): string

@@ -34,7 +34,7 @@ class ModerationController extends Controller
             ['id' => 'reports',      'title' => 'Репорты',    'href' => url('/moderation/reports'),      'permission' => 'resolve_report'],
             ['id' => 'applications', 'title' => 'Заявки',     'href' => url('/moderation/applications'), 'permission' => 'applications.view'],
             ['id' => 'sections',     'title' => 'Разделы',    'href' => url('/moderation/sections'),     'permission' => 'manage_categories'],
-            ['id' => 'topics',       'title' => 'Темы',       'href' => url('/moderation/topics'),       'permission' => 'lock_thread'],
+            ['id' => 'topics',       'title' => 'Темы',       'href' => url('/moderation/topics'),       'permission' => 'threads.view_mod'],
             ['id' => 'discussions',  'title' => 'Обсуждения', 'href' => url('/moderation/discussions'),  'permission' => 'edit_any_post'],
             ['id' => 'logs',         'title' => 'Логи',       'href' => url('/moderation/logs'),         'permission' => 'view_logs'],
         ];
@@ -284,6 +284,7 @@ class ModerationController extends Controller
         $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
     }
 
+
     private function handleTopics(array &$data): void
     {
         $service = new \App\Services\ThreadService();
@@ -294,20 +295,23 @@ class ModerationController extends Controller
             'locked'      => $_GET['locked'] ?? '',
             'sticky'      => $_GET['sticky'] ?? '',
             'hidden'      => $_GET['hidden'] ?? '',
+            'status'      => $_GET['status'] ?? '',
         ];
         $page = max(1, (int)($_GET['page'] ?? 1));
 
         $viewerId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
+        $showAllDrafts = \App\Services\AuthService::can('threads.view_drafts');
 
         $list = $service->list([
-            'q'           => $filters['q'],
-            'category_id' => $filters['category_id'] !== '' ? (int)$filters['category_id'] : null,
-            'locked'      => $filters['locked'] !== '' ? $filters['locked'] : null,
-            'sticky'      => $filters['sticky'] !== '' ? $filters['sticky'] : null,
-            'hidden'      => $filters['hidden'] !== '' ? $filters['hidden'] : null,
-            'show_hidden' => $filters['hidden'] !== '',
-            'viewer_id'   => $viewerId,
-            'status'      => $_GET['status'] ?? null,
+            'q'               => $filters['q'],
+            'category_id'     => $filters['category_id'] !== '' ? (int)$filters['category_id'] : null,
+            'locked'          => $filters['locked'] !== '' ? $filters['locked'] : null,
+            'sticky'          => $filters['sticky'] !== '' ? $filters['sticky'] : null,
+            'hidden'          => $filters['hidden'] !== '' ? $filters['hidden'] : null,
+            'show_hidden'     => $filters['hidden'] !== '',
+            'viewer_id'       => $viewerId,
+            'status'          => $filters['status'] !== '' ? $filters['status'] : null,
+            'show_all_drafts' => $showAllDrafts,
         ], $page, 20);
 
         $data['topics']          = $list['items'];
@@ -319,6 +323,12 @@ class ModerationController extends Controller
 
         $selectedId = (int)($_GET['id'] ?? 0);
         $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
+
+        $actorId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
+        $data['canActOnSelected'] = false;
+        if ($data['selected'] && $actorId > 0) {
+            $data['canActOnSelected'] = $service->canActOn($actorId, (int)$data['selected']['id']);
+        }
     }
 
     private function deny(): void

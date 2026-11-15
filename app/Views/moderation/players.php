@@ -19,7 +19,6 @@ $canDeactivate = $auth::can('players.deactivate') || $auth::hasRole('admin');
 $canBan        = $auth::can('players.ban') || $auth::hasRole('admin');
 $canMute       = $auth::can('players.mute') || $auth::hasRole('admin');
 $canRestrict   = $auth::can('players.restrict') || $auth::hasRole('admin');
-$canPunish     = $canBan || $canMute || $canRestrict;
 
 $columns = [
     [
@@ -125,7 +124,10 @@ $table = AdminTable::make(
 
 <main>
 <div class="container">
-    <div class="page-header flex">
+    <?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger" style="margin-bottom:12px;"><?= htmlspecialchars($_GET['error']) ?></div>
+<?php endif; ?>
+<div class="page-header flex">
         <div>
             <h2>Игроки</h2>
             <p>Учётные записи форума, роли и ограничения.</p>
@@ -151,6 +153,27 @@ $table = AdminTable::make(
                 <p class="text-muted">Выберите игрока в таблице</p>
             <?php else:
                 $s = $selected;
+
+                // Иерархия: считаем здесь (не зависим от контроллера)
+                $actorId = (int)($auth::user()['id'] ?? 0);
+                $targetId = (int)($s['id'] ?? 0);
+                $isSelf = $actorId > 0 && $actorId === $targetId;
+
+                $rank = (new \App\Services\RoleHierarchyService())->canActOnUser($actorId, $targetId);
+                // Наказания / деактивация — только ниже по иерархии (не на себя)
+                $act = !$isSelf && !empty($rank['ok']);
+                // Свой профиль можно редактировать; чужой — по иерархии
+                $canEditTarget = $isSelf || !empty($rank['ok']);
+                $canActOnSelected = $act;
+
+                $canDeactivate = $canDeactivate && $act;
+                $canBan        = $canBan && $act;
+                $canMute       = $canMute && $act;
+                $canRestrict   = $canRestrict && $act;
+                $canEdit       = $canEdit && $canEditTarget;
+                // роль себе не повышаем через эту форму (только чужим ниже)
+                $canEditRole   = $canEditRole && $act;
+                $canPunish     = $canBan || $canMute || $canRestrict;
                 $roleLabel = $roleModel->label($s['role_name'] ?? '');
             ?>
                 <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
@@ -200,10 +223,15 @@ $table = AdminTable::make(
 
                 <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
                     <?php if ($canEdit || $canEditRole): ?>
-                        <a class="btn btn-outline" href="<?= url('/moderation/players/edit/' . (int)$s['id']) ?>">Изменить</a>
+                        <?php if ($canEdit): ?><a class="btn btn-outline" href="<?= url('/moderation/players/edit/' . (int)$s['id']) ?>">Изменить</a><?php endif; ?>
                     <?php endif; ?>
 
-                    <?php if ($canDeactivate): ?>
+                    <?php if ($isSelf): ?>
+                    <p class="text-muted" style="font-size:13px;margin:10px 0;">Это ваш аккаунт. Можно изменить профиль; наказывать или деактивировать себя нельзя.</p>
+                <?php elseif (!$act && $selected): ?>
+                    <p class="text-muted" style="font-size:13px;margin:10px 0;">Нельзя менять этого игрока: роль равна вашей или выше.</p>
+                <?php endif; ?>
+                <?php if ($canDeactivate): ?>
                         <?php $isActive = !isset($s['is_active']) || (int)$s['is_active'] === 1; ?>
                         <form method="post" action="<?= url('/moderation/players/deactivate/' . (int)$s['id']) ?>">
                             <?php if ($isActive): ?>

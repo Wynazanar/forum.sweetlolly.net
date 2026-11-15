@@ -14,12 +14,27 @@ return [
             'edit_any_post'   => 'Редактировать чужие сообщения',
             'delete_own_post' => 'Удалять свои сообщения',
             'delete_any_post' => 'Удалять чужие сообщения',
-            'lock_thread'     => 'Закрывать / открывать темы',
-            'move_thread'     => 'Перемещать темы',
-            'delete_thread'   => 'Удалять темы',
             'react'           => 'Ставить реакции',
             'report'          => 'Жаловаться на контент',
             'send_pm'         => 'Личные сообщения',
+            'posts.attach'    => 'Прикреплять файлы к постам',
+        ],
+    ],
+    'threads' => [
+        'label' => 'Темы (модерация контента)',
+        'permissions' => [
+            'threads.view_mod'    => 'Список тем в админке',
+            'threads.publish'     => 'Публиковать без автопроверки',
+            'threads.moderate'    => 'Одобрять / отклонять pending',
+            'threads.pin'         => 'Закреплять темы',
+            'threads.lock'        => 'Закрывать / открывать темы',
+            'threads.move'        => 'Переносить темы между разделами',
+            'threads.hide'        => 'Скрывать темы',
+            'threads.edit_any'    => 'Редактировать любую тему',
+            // legacy-алиасы остаются в AuthService
+            'lock_thread'         => 'Закрывать темы (legacy)',
+            'move_thread'         => 'Переносить темы (legacy)',
+            'delete_thread'       => 'Удалять темы (legacy)',
         ],
     ],
     'moderation' => [
@@ -57,7 +72,8 @@ return [
     'admin' => [
         'label' => 'Администрирование',
         'permissions' => [
-            'manage_roles' => 'Управлять ролями и правами',
+            'manage_roles'        => 'Управлять ролями и правами',
+            'threads.view_drafts' => 'Видеть все черновики тем (расследования)',
         ],
     ],
 ];

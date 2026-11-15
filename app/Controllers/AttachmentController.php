@@ -62,6 +62,12 @@ class AttachmentController extends Controller
             exit;
         }
 
+        if (!AuthService::can('posts.attach') && !AuthService::can('create_post') && !AuthService::can('create_thread') && !AuthService::hasRole('admin')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Нет права прикреплять файлы']);
+            exit;
+        }
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             echo json_encode(['ok' => false, 'error' => 'POST only']);

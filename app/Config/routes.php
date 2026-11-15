@@ -71,6 +71,7 @@ return [
     new Route('/moderation/topics/sticky/:id',   'topic', 'sticky'),
     new Route('/moderation/topics/move/:id',     'topic', 'move'),
     new Route('/moderation/topics/hide/:id',     'topic', 'hide'),
+    new Route('/moderation/topics/moderate/:id', 'topic', 'moderate'),
 
     // Sections
     new Route('/moderation/sections/create',     'section', 'create'),

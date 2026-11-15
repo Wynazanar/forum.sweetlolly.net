@@ -447,6 +447,13 @@ try {
         ALTER TABLE bans
         ADD INDEX idx_bans_type (user_id, type, is_active);";
 
+    $sql[] = "ALTER TABLE roles
+        ADD COLUMN weight SMALLINT UNSIGNED NOT NULL DEFAULT 10 AFTER name;
+
+        UPDATE roles SET weight = 10 WHERE name IN ('player', 'user', 'игрок');
+        UPDATE roles SET weight = 50 WHERE name IN ('moderator', 'модер', 'модератор');
+        UPDATE roles SET weight = 100 WHERE name IN ('admin', 'administrator', 'админ', 'администратор')";
+
     foreach ($sql as $query) {
         $pdo->exec($query);
     }

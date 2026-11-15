@@ -77,6 +77,15 @@ class AuthService
             'players.ban'                 => ['ban_user'],
             'players.mute'                => ['ban_user'],
             'players.restrict'            => ['ban_user'],
+            'threads.view_mod'            => ['lock_thread', 'move_thread', 'delete_thread'],
+            'threads.publish'             => ['lock_thread', 'delete_thread'],
+            'threads.moderate'            => ['lock_thread', 'delete_thread'],
+            'threads.pin'                 => ['lock_thread'],
+            'threads.lock'                => ['lock_thread'],
+            'threads.move'                => ['move_thread', 'lock_thread'],
+            'threads.hide'                => ['lock_thread', 'delete_thread'],
+            'threads.edit_any'            => ['lock_thread', 'delete_thread', 'edit_any_post'],
+            'posts.attach'                => ['create_post', 'create_thread'],
         ];
         foreach ($legacy[$permission] ?? [] as $oldKey) {
             if (!empty($permissions[$oldKey])) {
@@ -148,7 +157,6 @@ class AuthService
         // Бана нет — сбросить устаревший is_banned, если висел
         if (!empty($row['is_banned'])) {
             (new User())->setBanned($userId, false, null);
-            
         }
 
         self::login($userId);

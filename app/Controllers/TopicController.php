@@ -16,7 +16,7 @@ class TopicController extends Controller
 
     public function create(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.edit_any');
         $this->title = 'Создать тему | Модерация';
         return $this->render('moderation/topic_form', [
             'mode'             => 'create',
@@ -29,7 +29,7 @@ class TopicController extends Controller
 
     public function store(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.edit_any');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ' . url('/moderation/topics'));
             exit;
@@ -45,13 +45,18 @@ class TopicController extends Controller
                 'user'            => AuthService::user(),
             ]);
         }
-        header('Location: ' . url('/moderation/topics') . '?id=' . (int)$result['id']);
+        $qid = (int)$result['id'];
+        $qs = '?id=' . $qid;
+        if (($result['status'] ?? '') === 'pending') {
+            $qs .= '&mod=pending';
+        }
+        header('Location: ' . url('/moderation/topics') . $qs);
         exit;
     }
 
     public function edit(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.edit_any');
         $id = (int)($params['id'] ?? 0);
         $item = $this->service->find($id);
         if (!$item) {
@@ -70,7 +75,7 @@ class TopicController extends Controller
 
     public function update(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.edit_any');
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
             header('Location: ' . url('/moderation/topics'));
@@ -93,7 +98,7 @@ class TopicController extends Controller
 
     public function lock(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.lock');
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $locked = !empty($_POST['locked']);
@@ -105,7 +110,7 @@ class TopicController extends Controller
 
     public function sticky(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.pin');
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $sticky = !empty($_POST['sticky']);
@@ -117,7 +122,7 @@ class TopicController extends Controller
 
     public function move(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.move');
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $cat = (int)($_POST['category_id'] ?? 0);
@@ -131,7 +136,7 @@ class TopicController extends Controller
 
     public function hide(array $params = [])
     {
-        $this->guard();
+        $this->guard('threads.hide');
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $this->service->hide($id, !empty($_POST['hidden']));
@@ -140,16 +145,29 @@ class TopicController extends Controller
         exit;
     }
 
-    private function guard(): void
+    private function guard(string $perm = 'threads.view_mod'): void
     {
         if (!AuthService::check() || (
-            !AuthService::can('lock_thread')
-            && !AuthService::can('move_thread')
-            && !AuthService::can('delete_thread')
+            !AuthService::can($perm)
             && !AuthService::hasRole('admin')
         )) {
             header('Location: ' . url('/'));
             exit;
         }
+    }
+
+    public function moderate(array $params = [])
+    {
+        $this->guard('threads.moderate');
+        $id = (int)($params['id'] ?? 0);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id <= 0) {
+            header('Location: ' . url('/moderation/topics'));
+            exit;
+        }
+        $status = $_POST['status'] ?? 'published';
+        $actor = AuthService::user();
+        $this->service->setStatus($id, $status, (int)$actor['id']);
+        header('Location: ' . url('/moderation/topics') . '?id=' . $id);
+        exit;
     }
 }

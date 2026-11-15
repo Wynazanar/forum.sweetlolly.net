@@ -4,6 +4,7 @@ namespace App\Controllers;
 use Core\Controller;
 use App\Models\Post;
 use App\Services\ContentBlocksService;
+use App\Services\ContentModerationService;
 use App\Services\AuthService;
 
 
@@ -25,8 +26,33 @@ class ThreadController extends Controller
             return $this->error(404);
         }
 
+        $viewerId = AuthService::check() ? (int)(AuthService::user()['id'] ?? 0) : 0;
+        $isMod = AuthService::check() && (
+            AuthService::can('lock_thread') || AuthService::can('threads.moderate') || AuthService::hasRole('admin')
+        );
+
+        $tStatus = $thread['status'] ?? 'published';
+        if ($tStatus === 'draft' && $viewerId !== (int)$thread['user_id']) {
+            return $this->error(404);
+        }
+        if ($tStatus === 'pending' && $viewerId !== (int)$thread['user_id'] && !$isMod) {
+            return $this->error(404);
+        }
+        if ($tStatus === 'rejected' && $viewerId !== (int)$thread['user_id'] && !$isMod) {
+            return $this->error(404);
+        }
+
         $posts = $postModel->findByThread($slug);
         $blocksSvc = new ContentBlocksService();
+
+        // Публично — только published; свои pending/draft видно автору; модер видит pending
+        $posts = array_values(array_filter($posts, function ($p) use ($viewerId, $isMod) {
+            $st = $p['status'] ?? 'published';
+            if ($st === 'published') return true;
+            if ($isMod && $st === 'pending') return true;
+            if ($viewerId > 0 && (int)($p['user_id'] ?? 0) === $viewerId) return true;
+            return false;
+        }));
 
         // Готовим HTML для каждого поста
         foreach ($posts as &$post) {
@@ -117,6 +143,13 @@ class ThreadController extends Controller
 
         $replyTo = !empty($_POST['reply_to_post_id']) ? (int)$_POST['reply_to_post_id'] : null;
 
+        $canBypass = AuthService::can('threads.publish')
+            || AuthService::can('lock_thread')
+            || AuthService::hasRole('admin');
+        $mod = new ContentModerationService();
+        $check = $mod->checkBlocks($blocks);
+        $postStatus = ($canBypass || $check['ok']) ? 'published' : 'pending';
+
         $postModel->createPost(
             (int)$thread['id'],
             $uid,
@@ -124,11 +157,15 @@ class ThreadController extends Controller
             $replyTo,
             $blocks,
             $html,
-            'published',
+            $postStatus,
             false
         );
 
-        header('Location: ' . url('/forums/' . rawurlencode($slug)));
+        $redir = url('/forums/' . rawurlencode($slug));
+        if ($postStatus === 'pending') {
+            $redir .= '?mod=pending';
+        }
+        header('Location: ' . $redir);
         exit;
     }
 }

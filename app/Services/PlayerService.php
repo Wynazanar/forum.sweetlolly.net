@@ -1,8 +1,11 @@
 <?php
 namespace App\Services;
 
+// RoleHierarchyService used for rank checks
+
 use App\Models\User;
 use App\Models\Ban;
+use App\Services\RoleHierarchyService;
 use App\Models\Role;
 use App\Services\AuthService;
 use App\Services\ActivityLogService;
@@ -95,6 +98,26 @@ class PlayerService
      */
     public function update(int $id, array $input): array
     {
+        $actorId = (int)(AuthService::user()['id'] ?? 0);
+        // Чужой аккаунт — только ниже по иерархии
+        if ($actorId > 0 && $actorId !== $id) {
+            $rank = (new RoleHierarchyService())->canActOnUser($actorId, $id);
+            if (!$rank['ok']) {
+                return ['ok' => false, 'errors' => ['rank' => $rank['error'] ?? 'Недостаточно прав по иерархии ролей']];
+            }
+        }
+        // Смену роли: не себе; и только на роль ниже своей
+        if (isset($input['role_id']) && $actorId > 0) {
+            if ($actorId === $id) {
+                unset($input['role_id']); // себе роль через эту форму не меняем
+            } else {
+                $assign = (new RoleHierarchyService())->canAssignRole($actorId, (int)$input['role_id']);
+                if (!$assign['ok']) {
+                    return ['ok' => false, 'errors' => ['role_id' => $assign['error'] ?? 'Нельзя назначить эту роль']];
+                }
+            }
+        }
+
         $user = $this->users->findWithRole($id);
         if (!$user) {
             return ['ok' => false, 'errors' => ['id' => 'Игрок не найден']];
@@ -137,6 +160,11 @@ class PlayerService
      */
     public function punish(int $userId, string $type, string $reason, ?string $expiresAt, int $actorId): array
     {
+        $rank = (new RoleHierarchyService())->canActOnUser($actorId, $userId);
+        if (!$rank['ok']) {
+            return ['ok' => false, 'errors' => ['rank' => $rank['error'] ?? 'Недостаточно прав по иерархии ролей']];
+        }
+
         $user = $this->users->findWithRole($userId);
         if (!$user) {
             return ['ok' => false, 'errors' => ['id' => 'Игрок не найден']];
@@ -183,6 +211,11 @@ class PlayerService
 
     public function revokeSanction(int $userId, string $type, int $actorId): array
     {
+        $rank = (new RoleHierarchyService())->canActOnUser($actorId, $userId);
+        if (!$rank['ok']) {
+            return ['ok' => false, 'errors' => ['rank' => $rank['error'] ?? 'Недостаточно прав по иерархии ролей']];
+        }
+
         $user = $this->users->findWithRole($userId);
         if (!$user) {
             return ['ok' => false, 'errors' => ['id' => 'Игрок не найден']];
@@ -212,6 +245,11 @@ class PlayerService
      */
     public function setActive(int $userId, bool $active, int $actorId): array
     {
+        $rank = (new RoleHierarchyService())->canActOnUser($actorId, $userId);
+        if (!$rank['ok']) {
+            return ['ok' => false, 'errors' => ['rank' => $rank['error'] ?? 'Недостаточно прав по иерархии ролей']];
+        }
+
         $user = $this->users->findWithRole($userId);
         if (!$user) {
             return ['ok' => false, 'errors' => ['id' => 'Игрок не найден']];
@@ -234,5 +272,10 @@ class PlayerService
         );
 
         return ['ok' => true];
+    }
+
+    public function canActOn(int $actorId, int $targetId): bool
+    {
+        return (new RoleHierarchyService())->canActOnUser($actorId, $targetId)['ok'] === true;
     }
 }

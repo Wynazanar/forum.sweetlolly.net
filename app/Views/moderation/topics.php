@@ -10,7 +10,15 @@ $page = (int)($page ?? 1);
 $pages = (int)($pages ?? 1);
 $categoryOptions = $categoryOptions ?? [];
 
-$canManage = AuthService::can('lock_thread') || AuthService::can('move_thread') || AuthService::hasRole('admin');
+$canManage = AuthService::hasRole('admin')
+    || AuthService::can('threads.view_mod')
+    || AuthService::can('lock_thread');
+$canPin = AuthService::can('threads.pin') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
+$canLock = AuthService::can('threads.lock') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
+$canMove = AuthService::can('threads.move') || AuthService::can('move_thread') || AuthService::hasRole('admin');
+$canHide = AuthService::can('threads.hide') || AuthService::can('delete_thread') || AuthService::hasRole('admin');
+$canEdit = AuthService::can('threads.edit_any') || AuthService::hasRole('admin');
+$canModerate = AuthService::can('threads.moderate') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
 
 $columns = [
     [
@@ -98,6 +106,17 @@ $filterConfig = [
         'empty'   => 'Закрепление',
         'options' => ['1' => 'Только закреплённые', '0' => 'Без закрепа'],
     ],
+    [
+        'name'    => 'status',
+        'type'    => 'select',
+        'empty'   => 'Все статусы',
+        'options' => [
+            'published' => 'Опубликованные',
+            'pending'   => 'На проверке',
+            'draft'     => 'Черновики',
+            'rejected'  => 'Отклонённые',
+        ],
+    ],
 ];
 
 $table = AdminTable::make(
@@ -123,12 +142,18 @@ $table = AdminTable::make(
 
 <main>
 <div class="container">
+    <?php if (($_GET['mod'] ?? '') === 'pending'): ?>
+        <div class="alert alert-warning" style="margin-bottom:12px;">
+            Тема отправлена <strong>на проверку</strong> (сработали правила автомодерации).
+        </div>
+    <?php endif; ?>
+
     <div class="page-header flex">
         <div>
             <h2>Темы форума</h2>
             <p>Список тем, закрепление, закрытие и перенос между разделами.</p>
         </div>
-        <?php if ($canManage): ?>
+        <?php if ($canEdit): ?>
             <a href="<?= url('/moderation/topics/create') ?>" class="btn btn-primary">＋ Создать тему</a>
         <?php endif; ?>
     </div>
@@ -165,7 +190,7 @@ $table = AdminTable::make(
 
                 <?php if ($canManage): ?>
                 <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
-                    <a class="btn btn-outline" href="<?= url('/moderation/topics/edit/' . $tid) ?>">Редактировать</a>
+                    <?php if ($canEdit): ?><a class="btn btn-outline" href="<?= url('/moderation/topics/edit/' . $tid) ?>">Редактировать</a><?php endif; ?>
 
                     <form method="post" action="<?= url('/moderation/topics/sticky/' . $tid) ?>">
                         <?php if (empty($s['is_sticky'])): ?>
@@ -204,6 +229,18 @@ $table = AdminTable::make(
                         <input type="hidden" name="hidden" value="1">
                         <button type="submit" class="btn btn-outline btn-danger" style="width:100%;">Скрыть</button>
                     </form>
+
+                    <?php if ($canModerate && ($s['status'] ?? '') === 'pending'): ?>
+                        <form method="post" action="<?= url('/moderation/topics/moderate/' . $tid) ?>">
+                            <input type="hidden" name="status" value="published">
+                            <button type="submit" class="btn btn-primary" style="width:100%;">Одобрить</button>
+                        </form>
+                        <form method="post" action="<?= url('/moderation/topics/moderate/' . $tid) ?>">
+                            <input type="hidden" name="status" value="rejected">
+                            <button type="submit" class="btn btn-outline" style="width:100%;"
+                                    onclick="return confirm('Отклонить тему?');">Отклонить</button>
+                        </form>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
