@@ -69,6 +69,7 @@ class ModerationController extends Controller
             'roles'        => $this->handleRoles($data),
             'players'      => $this->handlePlayers($data),
             'topics'       => $this->handleTopics($data),
+            'discussions'  => $this->handleDiscussions($data),
             default        => null,
         };
 
@@ -288,6 +289,52 @@ class ModerationController extends Controller
     private function handleTopics(array &$data): void
     {
         $service = new \App\Services\ThreadService();
+
+        $filters = [
+            'q'           => trim((string)($_GET['q'] ?? '')),
+            'category_id' => $_GET['category_id'] ?? '',
+            'locked'      => $_GET['locked'] ?? '',
+            'sticky'      => $_GET['sticky'] ?? '',
+            'hidden'      => $_GET['hidden'] ?? '',
+            'status'      => $_GET['status'] ?? '',
+        ];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+
+        $viewerId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
+        $showAllDrafts = \App\Services\AuthService::can('threads.view_drafts');
+
+        $list = $service->list([
+            'q'               => $filters['q'],
+            'category_id'     => $filters['category_id'] !== '' ? (int)$filters['category_id'] : null,
+            'locked'          => $filters['locked'] !== '' ? $filters['locked'] : null,
+            'sticky'          => $filters['sticky'] !== '' ? $filters['sticky'] : null,
+            'hidden'          => $filters['hidden'] !== '' ? $filters['hidden'] : null,
+            'show_hidden'     => $filters['hidden'] !== '',
+            'viewer_id'       => $viewerId,
+            'status'          => $filters['status'] !== '' ? $filters['status'] : null,
+            'show_all_drafts' => $showAllDrafts,
+        ], $page, 20);
+
+        $data['topics']          = $list['items'];
+        $data['total']           = $list['total'];
+        $data['page']            = $list['page'];
+        $data['pages']           = $list['pages'];
+        $data['filters']         = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
+        $data['categoryOptions'] = $service->categoryOptions();
+
+        $selectedId = (int)($_GET['id'] ?? 0);
+        $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
+
+        $actorId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
+        $data['canActOnSelected'] = false;
+        if ($data['selected'] && $actorId > 0) {
+            $data['canActOnSelected'] = $service->canActOn($actorId, (int)$data['selected']['id']);
+        }
+    }
+
+    private function handleDiscussions(array &$data): void
+    {
+        $service = new \App\Services\DiscussionService();
 
         $filters = [
             'q'           => trim((string)($_GET['q'] ?? '')),

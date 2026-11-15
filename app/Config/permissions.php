@@ -21,7 +21,7 @@ return [
         ],
     ],
     'threads' => [
-        'label' => 'Темы (модерация контента)',
+        'label' => 'Темы',
         'permissions' => [
             'threads.view_mod'    => 'Список тем в админке',
             'threads.publish'     => 'Публиковать без автопроверки',
@@ -37,12 +37,23 @@ return [
             'delete_thread'       => 'Удалять темы (legacy)',
         ],
     ],
+    'discussions' => [
+        'label' => 'Обсуждения',
+        'permissions' => [
+            'discussions.view_mod'    => 'Список обсуждений в админке',
+            'discussions.publish'     => 'Публиковать обсуждения без автопроверки',
+            'discussions.moderate'    => 'Одобрять / отклонять pending обсуждения',
+            'discussions.lock'        => 'Закрывать / открывать обсуждения',
+            'discussions.move'        => 'Переносить обсуждения между темами',
+            'discussions.hide'        => 'Скрывать обсуждения',
+            'discussions.edit_any'    => 'Редактировать любое обсуждение',
+        ],
+    ],
     'moderation' => [
         'label' => 'Модерация',
         'permissions' => [
             'resolve_report'    => 'Разбирать репорты / жалобы',
             'ban_user'          => 'Банить игроков (legacy)',
-            'view_logs'         => 'Смотреть логи',
             'manage_categories' => 'Управлять разделами форума',
         ],
     ],
@@ -72,8 +83,10 @@ return [
     'admin' => [
         'label' => 'Администрирование',
         'permissions' => [
+            'view_logs'           => 'Смотреть логи',
             'manage_roles'        => 'Управлять ролями и правами',
-            'threads.view_drafts' => 'Видеть все черновики тем (расследования)',
+            'threads.view_drafts' => 'Видеть все черновики тем',
+            'discussions.view_drafts' => 'Видеть все черновики обсуждений',
         ],
     ],
 ];

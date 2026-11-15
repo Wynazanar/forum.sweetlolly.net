@@ -73,6 +73,16 @@ return [
     new Route('/moderation/topics/hide/:id',     'topic', 'hide'),
     new Route('/moderation/topics/moderate/:id', 'topic', 'moderate'),
 
+    // Discussions
+    new Route('/moderation/discussions/create',       'discussion', 'create'),
+    new Route('/moderation/discussions/store',        'discussion', 'store'),
+    new Route('/moderation/discussions/edit/:id',     'discussion', 'edit'),
+    new Route('/moderation/discussions/update/:id',   'discussion', 'update'),
+    new Route('/moderation/discussions/lock/:id',     'discussion', 'lock'),
+    new Route('/moderation/discussions/move/:id',     'discussion', 'move'),
+    new Route('/moderation/discussions/hide/:id',     'discussion', 'hide'),
+    new Route('/moderation/discussions/moderate/:id', 'discussion', 'moderate'),
+
     // Sections
     new Route('/moderation/sections/create',     'section', 'create'),
     new Route('/moderation/sections/store',      'section', 'store'),
