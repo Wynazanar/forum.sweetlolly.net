@@ -31,8 +31,9 @@ class ThreadController extends Controller
             AuthService::can('lock_thread') || AuthService::can('threads.moderate') || AuthService::hasRole('admin')
         );
 
+        $canViewDrafts = AuthService::can('threads.view_drafts') || AuthService::can('discussions.view_drafts') || AuthService::hasRole('admin');
         $tStatus = $thread['status'] ?? 'published';
-        if ($tStatus === 'draft' && $viewerId !== (int)$thread['user_id']) {
+        if ($tStatus === 'draft' && $viewerId !== (int)$thread['user_id'] && !$canViewDrafts) {
             return $this->error(404);
         }
         if ($tStatus === 'pending' && $viewerId !== (int)$thread['user_id'] && !$isMod) {
@@ -46,10 +47,11 @@ class ThreadController extends Controller
         $blocksSvc = new ContentBlocksService();
 
         // Публично — только published; свои pending/draft видно автору; модер видит pending
-        $posts = array_values(array_filter($posts, function ($p) use ($viewerId, $isMod) {
+        $posts = array_values(array_filter($posts, function ($p) use ($viewerId, $isMod, $canViewDrafts) {
             $st = $p['status'] ?? 'published';
             if ($st === 'published') return true;
             if ($isMod && $st === 'pending') return true;
+            if ($st === 'draft' && $canViewDrafts) return true;
             if ($viewerId > 0 && (int)($p['user_id'] ?? 0) === $viewerId) return true;
             return false;
         }));

@@ -134,6 +134,9 @@ class AttachmentController extends Controller
             || AuthService::can('applications.view')
             || AuthService::can('resolve_report')
             || AuthService::can('lock_thread')
+            || AuthService::can('discussions.view_mod')
+            || AuthService::can('discussions.view_drafts')
+            || AuthService::can('threads.view_drafts')
         )) {
             return true;
         }

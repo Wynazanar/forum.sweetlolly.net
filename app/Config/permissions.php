@@ -40,13 +40,13 @@ return [
     'discussions' => [
         'label' => 'Обсуждения',
         'permissions' => [
-            'discussions.view_mod'    => 'Список обсуждений в админке',
+            'discussions.view_mod'    => 'Открывать раздел обсуждений в модерации',
+            'discussions.reply'       => 'Отвечать в обсуждениях от имени модерации',
             'discussions.publish'     => 'Публиковать обсуждения без автопроверки',
             'discussions.moderate'    => 'Одобрять / отклонять pending обсуждения',
             'discussions.lock'        => 'Закрывать / открывать обсуждения',
-            'discussions.move'        => 'Переносить обсуждения между темами',
             'discussions.hide'        => 'Скрывать обсуждения',
-            'discussions.edit_any'    => 'Редактировать любое обсуждение',
+            'discussions.edit_any'    => 'Редактировать сообщения других пользователей',
         ],
     ],
     'moderation' => [

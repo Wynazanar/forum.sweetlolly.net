@@ -19,7 +19,7 @@ class ModerationController extends Controller
             $this->deny();
         }
 
-        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::can('lock_thread') && !AuthService::can('players.view') && !AuthService::hasRole('admin')) {
+        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::can('lock_thread') && !AuthService::can('players.view') && !AuthService::can('discussions.view_mod') && !AuthService::hasRole('admin')) {
             $this->deny();
         }
 
@@ -35,7 +35,7 @@ class ModerationController extends Controller
             ['id' => 'applications', 'title' => 'Заявки',     'href' => url('/moderation/applications'), 'permission' => 'applications.view'],
             ['id' => 'sections',     'title' => 'Разделы',    'href' => url('/moderation/sections'),     'permission' => 'manage_categories'],
             ['id' => 'topics',       'title' => 'Темы',       'href' => url('/moderation/topics'),       'permission' => 'threads.view_mod'],
-            ['id' => 'discussions',  'title' => 'Обсуждения', 'href' => url('/moderation/discussions'),  'permission' => 'edit_any_post'],
+            ['id' => 'discussions',  'title' => 'Обсуждения', 'href' => url('/moderation/discussions'),  'permission' => 'discussions.view_mod'],
             ['id' => 'logs',         'title' => 'Логи',       'href' => url('/moderation/logs'),         'permission' => 'view_logs'],
         ];
 
@@ -334,48 +334,92 @@ class ModerationController extends Controller
 
     private function handleDiscussions(array &$data): void
     {
-        $service = new \App\Services\DiscussionService();
+        $db = new \App\Models\DiscussionAdmin();
+        $user = AuthService::user();
+        $viewerId = (int)($user['id'] ?? 0);
+        $seeDrafts = AuthService::can('discussions.view_drafts');
+        $queue = (($_GET['queue'] ?? '') === 'pending');
 
         $filters = [
-            'q'           => trim((string)($_GET['q'] ?? '')),
-            'category_id' => $_GET['category_id'] ?? '',
-            'locked'      => $_GET['locked'] ?? '',
-            'sticky'      => $_GET['sticky'] ?? '',
-            'hidden'      => $_GET['hidden'] ?? '',
-            'status'      => $_GET['status'] ?? '',
+            'q' => trim((string)($_GET['q'] ?? '')),
+            'category' => max(0, (int)($_GET['category'] ?? 0)),
+            'status' => in_array($_GET['status'] ?? '', ['', 'draft', 'pending', 'published', 'rejected'], true) ? (string)($_GET['status'] ?? '') : '',
+            'locked' => in_array($_GET['locked'] ?? '', ['', '0', '1'], true) ? (string)($_GET['locked'] ?? '') : '',
+            'hidden' => in_array($_GET['hidden'] ?? '', ['', '0', '1'], true) ? (string)($_GET['hidden'] ?? '') : '',
+            'post_status' => in_array($_GET['post_status'] ?? '', ['', 'draft', 'pending', 'published', 'rejected'], true) ? (string)($_GET['post_status'] ?? '') : '',
+            'reported' => ($_GET['reported'] ?? '') === '1' ? '1' : '',
         ];
+
         $page = max(1, (int)($_GET['page'] ?? 1));
+        $threads = $queue
+            ? ['items' => [], 'total' => 0, 'page' => 1, 'pages' => 1]
+            : $db->threads($filters, $page, 12, $viewerId, $seeDrafts);
+        $pendingCount = $db->pendingPostsCount();
+        $pendingQueue = $queue
+            ? $db->pendingPosts($filters, $page, 15, $viewerId, $seeDrafts)
+            : ['items' => [], 'total' => 0, 'page' => 1, 'pages' => 1];
 
-        $viewerId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
-        $showAllDrafts = \App\Services\AuthService::can('threads.view_drafts');
-
-        $list = $service->list([
-            'q'               => $filters['q'],
-            'category_id'     => $filters['category_id'] !== '' ? (int)$filters['category_id'] : null,
-            'locked'          => $filters['locked'] !== '' ? $filters['locked'] : null,
-            'sticky'          => $filters['sticky'] !== '' ? $filters['sticky'] : null,
-            'hidden'          => $filters['hidden'] !== '' ? $filters['hidden'] : null,
-            'show_hidden'     => $filters['hidden'] !== '',
-            'viewer_id'       => $viewerId,
-            'status'          => $filters['status'] !== '' ? $filters['status'] : null,
-            'show_all_drafts' => $showAllDrafts,
-        ], $page, 20);
-
-        $data['topics']          = $list['items'];
-        $data['total']           = $list['total'];
-        $data['page']            = $list['page'];
-        $data['pages']           = $list['pages'];
-        $data['filters']         = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
-        $data['categoryOptions'] = $service->categoryOptions();
-
-        $selectedId = (int)($_GET['id'] ?? 0);
-        $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
-
-        $actorId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
-        $data['canActOnSelected'] = false;
-        if ($data['selected'] && $actorId > 0) {
-            $data['canActOnSelected'] = $service->canActOn($actorId, (int)$data['selected']['id']);
+        $selectedId = max(0, (int)($_GET['id'] ?? 0));
+        $selected = $selectedId > 0 ? $db->thread($selectedId) : null;
+        if ($selected && ($selected['status'] ?? '') === 'draft' && !$seeDrafts && (int)$selected['user_id'] !== $viewerId) {
+            $selected = null;
         }
+
+        $posts = ['items' => [], 'total' => 0, 'page' => 1, 'pages' => 1];
+        $history = [];
+        $reports = [];
+        if ($selected) {
+            $posts = $db->posts($selectedId, $filters, max(1, (int)($_GET['post_page'] ?? 1)), 10, $viewerId, $seeDrafts);
+            if (!empty($_GET['post_id'])) {
+                $postId = (int)$_GET['post_id'];
+                $reports = $db->reportsForPost($postId);
+                $history = (new ActivityLog())->getHistoryForTarget('post', $postId);
+            }
+        }
+
+        // Подготовка индивидуальных действий для каждого сообщения с учётом
+        // владельца и иерархии ролей. Свои сообщения не требуют проверки ранга.
+        $hierarchy = new \App\Services\RoleHierarchyService();
+        foreach ($posts['items'] as &$postRow) {
+            $postOwnerId = (int)($postRow['user_id'] ?? 0);
+            $isOwn = $postOwnerId === $viewerId;
+            $rankAllowed = $isOwn || ($postOwnerId > 0 && $hierarchy->canActOnUser($viewerId, $postOwnerId)['ok']);
+            $postRow['can_edit_by_actor'] = $isOwn
+                ? (AuthService::can('edit_own_post') || AuthService::can('discussions.edit_any'))
+                : (AuthService::can('discussions.edit_any') && $rankAllowed);
+            $postRow['can_delete_by_actor'] = $isOwn
+                ? AuthService::can('delete_own_post')
+                : (AuthService::can('delete_any_post') && $rankAllowed);
+            $postRow['can_moderate_by_actor'] = !$isOwn && $rankAllowed;
+        }
+        unset($postRow);
+
+        $threadRankAllowed = $selected
+            ? $hierarchy->canActOnUser($viewerId, (int)$selected['user_id'])['ok']
+            : false;
+
+        $data += [
+            'threads' => $threads,
+            'selected' => $selected,
+            'posts' => $posts,
+            'filters' => $filters,
+            'categories' => $db->categories(),
+            'canDrafts' => $seeDrafts,
+            'pendingCount' => $pendingCount,
+            'pendingQueue' => $pendingQueue,
+            'queueMode' => $queue,
+            'reports' => $reports,
+            'history' => $history,
+            'canReply' => AuthService::can('discussions.reply') || AuthService::can('create_post'),
+            'canAttach' => AuthService::can('posts.attach'),
+            'canModerate' => AuthService::can('discussions.moderate'),
+            'canEdit' => AuthService::can('discussions.edit_any'),
+            'canEditThread' => AuthService::can('threads.edit_any') && $threadRankAllowed,
+            'canLock' => AuthService::can('discussions.lock') && $threadRankAllowed,
+            'canHide' => AuthService::can('discussions.hide') && $threadRankAllowed,
+            'canCreateThread' => AuthService::can('create_thread'),
+            'canResolve' => AuthService::can('resolve_report'),
+        ];
     }
 
     private function deny(): void

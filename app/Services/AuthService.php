@@ -52,6 +52,13 @@ class AuthService
             return false;
         }
 
+        // Роль администратора является системной ролью с полным доступом.
+        // Ранее разные контроллеры добавляли этот обход вручную, а шаблоны
+        // часто забывали его, из-за чего кнопки исчезали при доступном POST.
+        if (($user['role_name'] ?? '') === 'admin') {
+            return true;
+        }
+
         $permissions = $user['permissions'] ?? [];
 
         // Если permissions пришли строкой JSON
@@ -78,6 +85,7 @@ class AuthService
             'players.mute'                => ['ban_user'],
             'players.restrict'            => ['ban_user'],
             'threads.view_mod'            => ['lock_thread', 'move_thread', 'delete_thread'],
+            'discussions.view_drafts'     => [],
             'threads.publish'             => ['lock_thread', 'delete_thread'],
             'threads.moderate'            => ['lock_thread', 'delete_thread'],
             'threads.pin'                 => ['lock_thread'],
@@ -85,6 +93,8 @@ class AuthService
             'threads.move'                => ['move_thread', 'lock_thread'],
             'threads.hide'                => ['lock_thread', 'delete_thread'],
             'threads.edit_any'            => ['lock_thread', 'delete_thread', 'edit_any_post'],
+            'discussions.edit_any'        => ['edit_any_post'],
+            'discussions.reply'           => ['create_post'],
             'posts.attach'                => ['create_post', 'create_thread'],
         ];
         foreach ($legacy[$permission] ?? [] as $oldKey) {

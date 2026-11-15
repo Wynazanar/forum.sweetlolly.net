@@ -16,7 +16,7 @@ class TopicController extends Controller
 
     public function create(array $params = [])
     {
-        $this->guard('threads.edit_any');
+        $this->guard('create_thread');
         $this->title = 'Создать тему | Модерация';
         return $this->render('moderation/topic_form', [
             'mode'             => 'create',
@@ -29,7 +29,7 @@ class TopicController extends Controller
 
     public function store(array $params = [])
     {
-        $this->guard('threads.edit_any');
+        $this->guard('create_thread');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ' . url('/moderation/topics'));
             exit;

@@ -73,15 +73,14 @@ return [
     new Route('/moderation/topics/hide/:id',     'topic', 'hide'),
     new Route('/moderation/topics/moderate/:id', 'topic', 'moderate'),
 
-    // Discussions
-    new Route('/moderation/discussions/create',       'discussion', 'create'),
-    new Route('/moderation/discussions/store',        'discussion', 'store'),
-    new Route('/moderation/discussions/edit/:id',     'discussion', 'edit'),
-    new Route('/moderation/discussions/update/:id',   'discussion', 'update'),
-    new Route('/moderation/discussions/lock/:id',     'discussion', 'lock'),
-    new Route('/moderation/discussions/move/:id',     'discussion', 'move'),
-    new Route('/moderation/discussions/hide/:id',     'discussion', 'hide'),
-    new Route('/moderation/discussions/moderate/:id', 'discussion', 'moderate'),
+    // Discussions — POST-действия. GET-страница использует общий ModerationController
+    new Route('/moderation/discussions/reply', 'discussion', 'reply'),
+    new Route('/moderation/discussions/post-status/:id', 'discussion', 'postStatus'),
+    new Route('/moderation/discussions/post-edit/:id', 'discussion', 'editPost'),
+    new Route('/moderation/discussions/post-delete/:id', 'discussion', 'deletePost'),
+    new Route('/moderation/discussions/punish-post/:id', 'discussion', 'punishPostAuthor'),
+    new Route('/moderation/discussions/thread/:action/:id', 'discussion', 'threadAction'),
+    new Route('/moderation/discussions/report/:id', 'discussion', 'resolveReport'),
 
     // Sections
     new Route('/moderation/sections/create',     'section', 'create'),
@@ -89,6 +88,9 @@ return [
     new Route('/moderation/sections/edit/:id',   'section', 'edit'),
     new Route('/moderation/sections/update/:id', 'section', 'update'),
     new Route('/moderation/sections/delete/:id', 'section', 'delete'),
+
+    // GET /moderation/discussions намеренно обрабатывается общим
+    // ModerationController::index(), который выводит Tabs::make() и подключает discussions.php.
 
     // Общий moderation (должен быть после конкретных)
     new Route('/moderation', 'moderation', 'index'),
