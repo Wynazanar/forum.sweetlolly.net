@@ -24,7 +24,7 @@ class DiscussionController extends Controller
             'status'=>in_array($_GET['status']??'', ['','draft','pending','published','rejected'],true)?(string)($_GET['status']??''):'',
             'locked'=>in_array($_GET['locked']??'', ['','0','1'],true)?(string)($_GET['locked']??''):'',
             'hidden'=>in_array($_GET['hidden']??'', ['','0','1'],true)?(string)($_GET['hidden']??''):'',
-            'post_status'=>in_array($_GET['post_status']??'', ['','draft','pending','published','rejected'],true)?(string)($_GET['post_status']??''):'',
+            'post_status'=>in_array($_GET['post_status']??'', ['','draft','pending','published','rejected','hidden'],true)?(string)($_GET['post_status']??''):'',
             'reported'=>($_GET['reported']??'')==='1'?'1':'',
         ];
         $page=max(1,(int)($_GET['page']??1));
@@ -37,32 +37,59 @@ class DiscussionController extends Controller
         if($selected && ($selected['status']??'')==='draft' && !$seeDrafts && (int)$selected['user_id']!==$uid) $selected=null;
         $posts=['items'=>[],'total'=>0,'page'=>1,'pages'=>1];
         $history=[]; $reportHistory=[];
-        if($selected){
-            $posts=$this->db->posts($selectedId,$f,max(1,(int)($_GET['post_page']??1)),10,$uid,$seeDrafts);
-            $history=(new \App\Models\ActivityLog())->getHistoryForTarget('post', isset($_GET['post_id'])?(int)$_GET['post_id']:null);
-            if(!empty($_GET['post_id'])) { $reportHistory=$this->db->reportsForPost((int)$_GET['post_id']); $history=(new \App\Models\ActivityLog())->getHistoryForTarget('post',(int)$_GET['post_id']); }
+        $hierarchy = new \App\Services\RoleHierarchyService();
+        $actorId = (int)$uid;
+        $isAdmin = AuthService::isAdmin();
+        // Право видеть скрытые сообщения: админ или явное право, или любое право на удаление/модерацию
+        $seeHidden = $isAdmin
+            || AuthService::can('discussions.view_hidden')
+            || AuthService::can('delete_any_post')
+            || AuthService::can('discussions.moderate');
+
+        if ($selected) {
+            $posts = $this->db->posts($selectedId, $f, max(1, (int)($_GET['post_page'] ?? 1)), 10, $uid, $seeDrafts, $seeHidden);
+            $history = (new \App\Models\ActivityLog())->getHistoryForTarget('post', isset($_GET['post_id']) ? (int)$_GET['post_id'] : null);
+            if (!empty($_GET['post_id'])) {
+                $reportHistory = $this->db->reportsForPost((int)$_GET['post_id']);
+                $history = (new \App\Models\ActivityLog())->getHistoryForTarget('post', (int)$_GET['post_id']);
+            }
         }
-        $actorId=(int)$uid;
-        $hierarchy=new \App\Services\RoleHierarchyService();
-        foreach($posts['items'] as &$postRow){
+        foreach ($posts['items'] as &$postRow) {
             $isOwn = (int)$postRow['user_id'] === $actorId;
-            $rankAllowed = $isOwn || $hierarchy->canActOnUser($actorId,(int)$postRow['user_id'])['ok'];
+            $rankCheck = $hierarchy->canActOnUser($actorId, (int)$postRow['user_id']);
+            $rankAllowed = $isOwn || !empty($rankCheck['ok']);
+            $isHidden = ($postRow['status'] ?? '') === 'hidden';
+
             $postRow['can_edit_by_actor'] = $isOwn
                 ? (AuthService::can('edit_own_post') || AuthService::can('discussions.edit_any'))
                 : (AuthService::can('discussions.edit_any') && $rankAllowed);
-            $postRow['can_delete_by_actor'] = $isOwn
-                ? AuthService::can('delete_own_post')
-                : (AuthService::can('delete_any_post') && $rankAllowed);
-            $postRow['can_moderate_by_actor'] = !$isOwn && $rankAllowed;
-            $adminOverride = AuthService::hasRole('admin');
-            $postRow['can_punish_by_actor'] = !$isOwn && $rankAllowed && (
-                AuthService::can('players.ban') || AuthService::can('players.mute') || AuthService::can('players.restrict') || $adminOverride
+
+            $postRow['can_delete_by_actor'] = !$isHidden && (
+                $isOwn
+                    ? AuthService::can('delete_own_post')
+                    : (AuthService::can('delete_any_post') && $rankAllowed)
             );
-            $postRow['can_ban_author'] = AuthService::can('players.ban') || $adminOverride;
-            $postRow['can_mute_author'] = AuthService::can('players.mute') || $adminOverride;
-            $postRow['can_restrict_author'] = AuthService::can('players.restrict') || $adminOverride;
-            $postRow['can_reject_with_punishment'] = AuthService::can('discussions.moderate') || $adminOverride;
-        } unset($postRow);
+            $postRow['can_restore_by_actor'] = $isHidden && (
+                $isOwn
+                    ? AuthService::can('delete_own_post')
+                    : ((AuthService::can('delete_any_post') || AuthService::can('discussions.view_hidden')) && $rankAllowed)
+            );
+
+            $postRow['can_moderate_by_actor'] = !$isOwn && $rankAllowed;
+
+            // Наказание: не своё сообщение + иерархия + (админ или право на бан/мут/restrict)
+            // AuthService::can() для админа всегда true, поэтому отдельные проверки permissions сработают
+            $postRow['can_punish_by_actor'] = !$isOwn && $rankAllowed && (
+                AuthService::can('players.ban')
+                || AuthService::can('players.mute')
+                || AuthService::can('players.restrict')
+            );
+            $postRow['can_ban_author']      = AuthService::can('players.ban');
+            $postRow['can_mute_author']     = AuthService::can('players.mute');
+            $postRow['can_restrict_author'] = AuthService::can('players.restrict');
+            $postRow['can_reject_with_punishment'] = AuthService::can('discussions.moderate');
+        }
+        unset($postRow);
         $threadRankAllowed=$selected ? $hierarchy->canActOnUser($actorId,(int)$selected['user_id'])['ok'] : false;
         $this->title='Обсуждения | Модерация';
         // Эта страница использует отдельный контроллер, поэтому сама выводит
@@ -135,7 +162,7 @@ class DiscussionController extends Controller
 
     public function postStatus(array $params=[]){
         $this->guard('discussions.moderate'); $id=(int)($params['id']??0); $this->guardTargetPost($id); $status=(string)($_POST['status']??'published');
-        if($_SERVER['REQUEST_METHOD']==='POST' && in_array($status,['published','pending','rejected','draft'],true)){
+        if($_SERVER['REQUEST_METHOD']==='POST' && in_array($status,['published','pending','rejected','draft','hidden'],true)){
             $this->db->setPostStatus($id,$status);
             ActivityLogService::log((int)AuthService::user()['id'],'moderated_post','success','post',$id,null,['status'=>$status]);
         }
@@ -163,17 +190,29 @@ class DiscussionController extends Controller
 
     public function deletePost(array $params=[]){
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !AuthService::check()) { $this->back(); }
-        $id=(int)($params['id']??0);
-        $owner=$this->db->postAuthorId($id);
-        $actor=(int)AuthService::user()['id'];
-        $own=$owner===$actor;
-        $allowed=$own
+        $id = (int)($params['id'] ?? 0);
+        $owner = $this->db->postAuthorId($id);
+        $actor = (int)AuthService::user()['id'];
+        $own = $owner === $actor;
+        $hierarchy = new \App\Services\RoleHierarchyService();
+        $isAdmin = $hierarchy->isAdminUser($actor) || AuthService::hasRole('admin');
+        $allowed = $own
             ? AuthService::can('delete_own_post')
-            : (AuthService::can('delete_any_post') && (new \App\Services\RoleHierarchyService())->canActOnUser($actor,$owner)['ok']);
-        if($id<=0 || !$allowed){http_response_code(403);exit('Forbidden: delete permission required');}
-        $this->db->markPostDeleted($id);
-        ActivityLogService::log($actor,'deleted_post','success','post',$id,null,['own'=>$own]);
-        $this->back((int)($_POST['thread_id']??0));
+            : ((AuthService::can('delete_any_post') || $isAdmin) && $hierarchy->canActOnUser($actor, $owner)['ok']);
+        if ($id <= 0 || !$allowed) {
+            http_response_code(403);
+            exit('Forbidden: delete permission required');
+        }
+        $restore = !empty($_POST['restore']);
+        if ($restore) {
+            $this->db->restorePost($id);
+            ActivityLogService::log($actor, 'restored_post', 'success', 'post', $id, null, ['own' => $own]);
+            $this->back((int)($_POST['thread_id'] ?? 0), 'Сообщение восстановлено');
+        } else {
+            $this->db->markPostDeleted($id);
+            ActivityLogService::log($actor, 'hidden_post', 'success', 'post', $id, null, ['own' => $own]);
+            $this->back((int)($_POST['thread_id'] ?? 0), 'Сообщение скрыто');
+        }
     }
     public function threadAction(array $params=[]){
         $id=(int)($params['id']??0); $action=(string)($params['action']??'');

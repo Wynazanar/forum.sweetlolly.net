@@ -80,10 +80,12 @@ class Thread extends Model
                 t.*,
                 u.username AS author_name,
                 c.title AS category_title,
+                pc.title AS parent_category_title,
                 GREATEST(0, t.posts_count - 1) AS replies_count
              FROM threads t
              JOIN users u ON u.id = t.user_id
              JOIN categories c ON c.id = t.category_id
+             LEFT JOIN categories pc ON pc.id = c.parent_id
              WHERE $whereSql
              ORDER BY t.is_sticky DESC, t.last_post_at DESC, t.id DESC
              LIMIT $perPage OFFSET $offset",
@@ -100,10 +102,12 @@ class Thread extends Model
                 t.*,
                 u.username AS author_name,
                 c.title AS category_title,
+                pc.title AS parent_category_title,
                 GREATEST(0, t.posts_count - 1) AS replies_count
              FROM threads t
              JOIN users u ON u.id = t.user_id
              JOIN categories c ON c.id = t.category_id
+             LEFT JOIN categories pc ON pc.id = c.parent_id
              WHERE t.id = ?
              LIMIT 1",
             [$id]

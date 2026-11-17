@@ -381,7 +381,6 @@ HTML;
     private function renderPagination(): string
     {
         if ($this->pages <= 1 && $this->total <= count($this->items)) {
-            // Даже при одной странице можно показать «Показано N из M», если total известен
             if ($this->total > 0) {
                 return sprintf(
                     '<div class="pagination">
@@ -394,8 +393,26 @@ HTML;
             return '';
         }
 
+        // Окно: 1 … (cur-1) cur (cur+1) … last
         $pagesHtml = '';
+        $window = 1;
+        $show = [];
         for ($i = 1; $i <= $this->pages; $i++) {
+            if (
+                $i === 1
+                || $i === $this->pages
+                || ($i >= $this->page - $window && $i <= $this->page + $window)
+            ) {
+                $show[] = $i;
+            }
+        }
+        $show = array_values(array_unique($show));
+        sort($show);
+        $prevNum = 0;
+        foreach ($show as $i) {
+            if ($prevNum && $i - $prevNum > 1) {
+                $pagesHtml .= '<span class="pagination-ellipsis">…</span>';
+            }
             $url = url($this->buildUrl(['page' => $i]));
             $pagesHtml .= sprintf(
                 '<a href="%s" class="%s">%d</a>',
@@ -403,20 +420,32 @@ HTML;
                 $i === $this->page ? 'is-active' : '',
                 $i
             );
+            $prevNum = $i;
         }
+
+        $prevUrl = $this->page > 1 ? url($this->buildUrl(['page' => $this->page - 1])) : '';
+        $nextUrl = $this->page < $this->pages ? url($this->buildUrl(['page' => $this->page + 1])) : '';
+        $prevBtn = $prevUrl
+            ? '<a href="' . htmlspecialchars($prevUrl, ENT_QUOTES, 'UTF-8') . '" class="pagination-nav" aria-label="Назад">‹</a>'
+            : '<span class="pagination-nav is-disabled" aria-disabled="true">‹</span>';
+        $nextBtn = $nextUrl
+            ? '<a href="' . htmlspecialchars($nextUrl, ENT_QUOTES, 'UTF-8') . '" class="pagination-nav" aria-label="Вперёд">›</a>'
+            : '<span class="pagination-nav is-disabled" aria-disabled="true">›</span>';
 
         return sprintf(
             '<div class="pagination">
-                <span>Показано %d из %d · Страница %d из %d</span>
+                <span>Показано %d из %d</span>
                 <div class="pagination-pages">
+                    %s
+                    %s
                     %s
                 </div>
             </div>',
             count($this->items),
             $this->total,
-            $this->page,
-            $this->pages,
-            $pagesHtml
+            $prevBtn,
+            $pagesHtml,
+            $nextBtn
         );
     }
 

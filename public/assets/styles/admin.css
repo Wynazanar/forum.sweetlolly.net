@@ -1,6 +1,11 @@
 :root {
     --table-header: #FAF8FC;
     --table-border: #E9E2EE;
+    --body-background: #F6F4F8;
+}
+
+body {
+    background: var(--body-background);
 }
 
 .logs-filters {
@@ -195,6 +200,7 @@ input {
 }
 
 .page-header a,
+.btn-outline,
 .btn-form-primary,
 .btn-form-secondary,
 .btn-danger,
@@ -211,6 +217,12 @@ input {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
+}
+
+.btn-outline {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
 }
 
 .btn-danger {
@@ -231,6 +243,7 @@ input {
     background: var(--surface);
     padding-block: 12px;
     overflow: hidden;
+    border-bottom: 1px solid var(--table-border);
 }
 
 .tabs-grid {

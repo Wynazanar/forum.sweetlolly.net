@@ -272,7 +272,7 @@ class ModerationController extends Controller
             'role_id' => $filters['role_id'] !== '' ? (int)$filters['role_id'] : null,
             'banned'  => $filters['banned'] !== '' ? $filters['banned'] : null,
             'active'  => $filters['active'] !== '' ? $filters['active'] : null,
-        ], $page, 20);
+        ], $page, 10);
 
         $data['players']     = $list['items'];
         $data['total']       = $list['total'];
@@ -320,7 +320,9 @@ class ModerationController extends Controller
         $data['page']            = $list['page'];
         $data['pages']           = $list['pages'];
         $data['filters']         = array_filter($filters, static fn($v) => $v !== '' && $v !== null);
+        // Фильтр — по категориям; перенос темы — только в разделы
         $data['categoryOptions'] = $service->categoryOptions();
+        $data['sectionOptions']  = $service->sectionOptionsFlat();
 
         $selectedId = (int)($_GET['id'] ?? 0);
         $data['selected'] = $selectedId > 0 ? $service->find($selectedId) : null;
@@ -338,6 +340,12 @@ class ModerationController extends Controller
         $user = AuthService::user();
         $viewerId = (int)($user['id'] ?? 0);
         $seeDrafts = AuthService::can('discussions.view_drafts');
+        $isAdmin = AuthService::isAdmin();
+        // Скрытые сообщения видны админу или при наличии явного права / права на удаление / модерацию
+        $seeHidden = $isAdmin
+            || AuthService::can('discussions.view_hidden')
+            || AuthService::can('delete_any_post')
+            || AuthService::can('discussions.moderate');
         $queue = (($_GET['queue'] ?? '') === 'pending');
 
         $filters = [
@@ -346,7 +354,7 @@ class ModerationController extends Controller
             'status' => in_array($_GET['status'] ?? '', ['', 'draft', 'pending', 'published', 'rejected'], true) ? (string)($_GET['status'] ?? '') : '',
             'locked' => in_array($_GET['locked'] ?? '', ['', '0', '1'], true) ? (string)($_GET['locked'] ?? '') : '',
             'hidden' => in_array($_GET['hidden'] ?? '', ['', '0', '1'], true) ? (string)($_GET['hidden'] ?? '') : '',
-            'post_status' => in_array($_GET['post_status'] ?? '', ['', 'draft', 'pending', 'published', 'rejected'], true) ? (string)($_GET['post_status'] ?? '') : '',
+            'post_status' => in_array($_GET['post_status'] ?? '', ['', 'draft', 'pending', 'published', 'rejected', 'hidden'], true) ? (string)($_GET['post_status'] ?? '') : '',
             'reported' => ($_GET['reported'] ?? '') === '1' ? '1' : '',
         ];
 
@@ -369,7 +377,8 @@ class ModerationController extends Controller
         $history = [];
         $reports = [];
         if ($selected) {
-            $posts = $db->posts($selectedId, $filters, max(1, (int)($_GET['post_page'] ?? 1)), 10, $viewerId, $seeDrafts);
+            // 7-й аргумент — $seeHidden
+            $posts = $db->posts($selectedId, $filters, max(1, (int)($_GET['post_page'] ?? 1)), 10, $viewerId, $seeDrafts, $seeHidden);
             if (!empty($_GET['post_id'])) {
                 $postId = (int)$_GET['post_id'];
                 $reports = $db->reportsForPost($postId);
@@ -377,25 +386,46 @@ class ModerationController extends Controller
             }
         }
 
-        // Подготовка индивидуальных действий для каждого сообщения с учётом
-        // владельца и иерархии ролей. Свои сообщения не требуют проверки ранга.
+        // Индивидуальные права по каждому сообщению + иерархия ролей
         $hierarchy = new \App\Services\RoleHierarchyService();
         foreach ($posts['items'] as &$postRow) {
             $postOwnerId = (int)($postRow['user_id'] ?? 0);
             $isOwn = $postOwnerId === $viewerId;
-            $rankAllowed = $isOwn || ($postOwnerId > 0 && $hierarchy->canActOnUser($viewerId, $postOwnerId)['ok']);
+            $rankAllowed = $isOwn || ($postOwnerId > 0 && !empty($hierarchy->canActOnUser($viewerId, $postOwnerId)['ok']));
+            $isHidden = ($postRow['status'] ?? '') === 'hidden';
+
             $postRow['can_edit_by_actor'] = $isOwn
                 ? (AuthService::can('edit_own_post') || AuthService::can('discussions.edit_any'))
                 : (AuthService::can('discussions.edit_any') && $rankAllowed);
-            $postRow['can_delete_by_actor'] = $isOwn
-                ? AuthService::can('delete_own_post')
-                : (AuthService::can('delete_any_post') && $rankAllowed);
+
+            $postRow['can_delete_by_actor'] = !$isHidden && (
+                $isOwn
+                    ? AuthService::can('delete_own_post')
+                    : (AuthService::can('delete_any_post') && $rankAllowed)
+            );
+            $postRow['can_restore_by_actor'] = $isHidden && (
+                $isOwn
+                    ? AuthService::can('delete_own_post')
+                    : ((AuthService::can('delete_any_post') || AuthService::can('discussions.view_hidden')) && $rankAllowed)
+            );
+
             $postRow['can_moderate_by_actor'] = !$isOwn && $rankAllowed;
+
+            // Форма наказания: не своё + иерархия + право на бан/мут/restrict (у админа can() всегда true)
+            $postRow['can_punish_by_actor'] = !$isOwn && $rankAllowed && (
+                AuthService::can('players.ban')
+                || AuthService::can('players.mute')
+                || AuthService::can('players.restrict')
+            );
+            $postRow['can_ban_author']      = AuthService::can('players.ban');
+            $postRow['can_mute_author']     = AuthService::can('players.mute');
+            $postRow['can_restrict_author'] = AuthService::can('players.restrict');
+            $postRow['can_reject_with_punishment'] = AuthService::can('discussions.moderate');
         }
         unset($postRow);
 
         $threadRankAllowed = $selected
-            ? $hierarchy->canActOnUser($viewerId, (int)$selected['user_id'])['ok']
+            ? !empty($hierarchy->canActOnUser($viewerId, (int)$selected['user_id'])['ok'])
             : false;
 
         $data += [

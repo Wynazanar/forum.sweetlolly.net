@@ -124,10 +124,18 @@ class RoleHierarchyService
         return $this->roleRank($roleId)['weight'];
     }
 
-    private function isAdminName(?string $name): bool
+    public function isAdminName(?string $name): bool
     {
         $n = mb_strtolower(trim((string)$name));
         return in_array($n, self::ADMIN_NAMES, true);
+    }
+
+    /** Проверка, является ли пользователь администратором (по имени роли). */
+    public function isAdminUser(int $userId): bool
+    {
+        if ($userId <= 0) return false;
+        $rank = $this->userRank($userId);
+        return $this->isAdminName($rank['name'] ?? '');
     }
 
     /** @return array{weight:int, name:string} */

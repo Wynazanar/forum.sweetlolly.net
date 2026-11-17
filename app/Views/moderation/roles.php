@@ -1,6 +1,7 @@
 <?php
 $roles = $roles ?? [];
 $roleModel = new \App\Models\Role();
+$canManageRoles = \App\Services\AuthService::can('manage_roles');
 ?>
 
 <main>
@@ -10,7 +11,9 @@ $roleModel = new \App\Models\Role();
                 <h2>Роли</h2>
                 <p>Права доступа: кто что может на форуме, в модерации и в заявках.</p>
             </div>
+            <?php if ($canManageRoles): ?>
             <a href="<?= url('/moderation/roles/create') ?>" class="btn btn-primary">＋ Создать роль</a>
+            <?php endif; ?>
         </div>
 
         <div class="logs-table-card">
@@ -52,6 +55,7 @@ $roleModel = new \App\Models\Role();
                             </td>
                             <td><?= (int)($role['users_count'] ?? 0) ?></td>
                             <td style="white-space:nowrap;">
+                                <?php if ($canManageRoles): ?>
                                 <a href="<?= url('/moderation/roles/edit/' . (int)$role['id']) ?>" class="btn btn-outline btn-sm">Изменить</a>
                                 <?php if (!$isSystem): ?>
                                 <form method="post" action="<?= url('/moderation/roles/delete/' . (int)$role['id']) ?>"
@@ -59,6 +63,9 @@ $roleModel = new \App\Models\Role();
                                       onsubmit="return confirm('Удалить роль?');">
                                     <button type="submit" class="btn btn-outline btn-danger btn-sm">Удалить</button>
                                 </form>
+                                <?php endif; ?>
+                                <?php else: ?>
+                                <span class="text-muted" style="font-size:12px;">только просмотр</span>
                                 <?php endif; ?>
                             </td>
                         </tr>

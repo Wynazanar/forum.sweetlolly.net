@@ -72,10 +72,16 @@ class DiscussionAdmin extends Model
         return $this->findOne("SELECT t.*,u.username author_name,c.title category_title FROM threads t JOIN users u ON u.id=t.user_id LEFT JOIN categories c ON c.id=t.category_id WHERE t.id=? LIMIT 1",[$id]);
     }
 
-    public function posts(int $threadId, array $f, int $page, int $perPage, int $viewerId, bool $seeAllDrafts): array {
+    public function posts(int $threadId, array $f, int $page, int $perPage, int $viewerId, bool $seeAllDrafts, bool $seeHidden = false): array {
         $page=max(1,$page); $perPage=max(5,min(50,$perPage)); $offset=($page-1)*$perPage;
         $where=['p.thread_id=?']; $params=[$threadId];
-        if ($f['post_status']!=='') { $where[]="COALESCE(p.status, 'published')=?"; $params[]=$f['post_status']; }
+        if ($f['post_status']!=='') {
+            $where[]="COALESCE(p.status, 'published')=?";
+            $params[]=$f['post_status'];
+        } elseif (!$seeHidden) {
+            // По умолчанию скрытые сообщения не показываем, пока нет права view_hidden
+            $where[]="COALESCE(p.status,'published') <> 'hidden'";
+        }
         if (!$seeAllDrafts) { $where[]="(COALESCE(p.status,'published') <> 'draft' OR p.user_id=?)"; $params[]=$viewerId; }
         if ($f['q'] !== '') { $where[]='(p.content LIKE ? OR p.user_id IN (SELECT id FROM users WHERE username LIKE ?))'; $like='%'.$f['q'].'%'; $params[]=$like; $params[]=$like; }
         if ($f['reported']==='1') $where[]="EXISTS(SELECT 1 FROM reports r WHERE r.target_type='post' AND r.target_id=p.id AND r.status='pending')";
@@ -106,9 +112,9 @@ class DiscussionAdmin extends Model
     public function setThreadStatus(int $id,string $status): void {
         $this->execute("UPDATE threads SET status=?,updated_at=NOW() WHERE id=?",[$status,$id]);
     }
-    public function setPostHidden(int $id,bool $hidden): void {
-        // Скрытие представлено статусом, не требует миграции.
-        $this->setPostStatus($id,$hidden?'rejected':'published');
+    public function setPostHidden(int $id, bool $hidden): void {
+        // Скрытие через статус 'hidden' — контент сохраняется, миграция не нужна.
+        $this->setPostStatus($id, $hidden ? 'hidden' : 'published');
     }
     public function reportsForPost(int $postId): array {
         return $this->findMany("SELECT r.*,u.username reporter_name FROM reports r JOIN users u ON u.id=r.reporter_id WHERE r.target_type='post' AND r.target_id=? ORDER BY r.created_at DESC LIMIT 20",[$postId]);
@@ -119,10 +125,18 @@ class DiscussionAdmin extends Model
     public function setPostContent(int $id,string $content,string $status='published'): void {
         $this->execute("UPDATE posts SET content=?,content_html=?,content_blocks=?,status=?,updated_at=NOW() WHERE id=?",[$content,nl2br(htmlspecialchars($content,ENT_QUOTES,'UTF-8')),json_encode([['type'=>'text','md'=>$content]],JSON_UNESCAPED_UNICODE),$status,$id]);
     }
-    /** Логическое удаление без потери связей и истории модерации. */
+    /**
+     * Скрытие сообщения (не физическое удаление).
+     * Контент остаётся в БД. Статус = 'hidden'.
+     * Модераторы с правом discussions.view_hidden видят такие сообщения и могут восстановить.
+     */
     public function markPostDeleted(int $id): void {
-        $content='Сообщение удалено автором.';
-        $this->execute("UPDATE posts SET content=?,content_html=?,content_blocks=?,status='rejected',updated_at=NOW() WHERE id=?",[$content,htmlspecialchars($content,ENT_QUOTES,'UTF-8'),json_encode([['type'=>'text','md'=>$content]],JSON_UNESCAPED_UNICODE),$id]);
+        $this->execute("UPDATE posts SET status='hidden', updated_at=NOW() WHERE id=?", [$id]);
+    }
+
+    /** Восстановить скрытое сообщение. */
+    public function restorePost(int $id): void {
+        $this->execute("UPDATE posts SET status='published', updated_at=NOW() WHERE id=? AND status='hidden'", [$id]);
     }
     public function setThreadLock(int $id,bool $locked): void {
         $this->execute("UPDATE threads SET is_locked=?,updated_at=NOW() WHERE id=?",[$locked?1:0,$id]);

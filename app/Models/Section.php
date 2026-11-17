@@ -164,7 +164,7 @@ class Section extends Model
     }
 
     /**
-     * Опции категорий для фильтра / select родителя
+     * Опции категорий (только верхний уровень, parent_id IS NULL)
      */
     public function getCategoryOptions(): array
     {
@@ -174,9 +174,83 @@ class Section extends Model
 
         $options = [];
         foreach ($rows as $row) {
-            $options[$row['id']] = $row['title'];
+            $options[(int)$row['id']] = $row['title'];
         }
         return $options;
+    }
+
+    /**
+     * Опции разделов, сгруппированные по parent_id категории.
+     * Возвращает: [ parent_id => [ section_id => title, ... ], ... ]
+     */
+    public function getSectionOptionsByCategory(): array
+    {
+        $rows = $this->findMany(
+            "SELECT id, parent_id, title FROM categories
+             WHERE parent_id IS NOT NULL
+             ORDER BY position, id"
+        );
+        $grouped = [];
+        foreach ($rows as $row) {
+            $pid = (int)$row['parent_id'];
+            $grouped[$pid][(int)$row['id']] = $row['title'];
+        }
+        return $grouped;
+    }
+
+    /**
+     * Плоский список разделов (для обратной совместимости / фильтров).
+     * Формат: [ section_id => "Категория → Раздел" ]
+     */
+    public function getSectionOptionsFlat(): array
+    {
+        $rows = $this->findMany(
+            "SELECT s.id, s.title AS section_title, c.title AS category_title
+             FROM categories s
+             JOIN categories c ON c.id = s.parent_id
+             WHERE s.parent_id IS NOT NULL
+             ORDER BY c.position, s.position, s.id"
+        );
+        $options = [];
+        foreach ($rows as $row) {
+            $options[(int)$row['id']] = $row['category_title'] . ' → ' . $row['section_title'];
+        }
+        return $options;
+    }
+
+    /**
+     * Является ли запись разделом (есть parent_id), а не категорией.
+     */
+    public function isSection(int $id): bool
+    {
+        $row = $this->findOne(
+            "SELECT parent_id FROM categories WHERE id = ? LIMIT 1",
+            [$id]
+        );
+        if (!$row) {
+            return false;
+        }
+        $pid = $row['parent_id'];
+        return !($pid === null || $pid === '' || $pid === false);
+    }
+
+    /**
+     * Получить parent_id категории для раздела (или null, если это сама категория).
+     */
+    public function getParentId(int $id): ?int
+    {
+        $row = $this->findOne(
+            "SELECT parent_id FROM categories WHERE id = ? LIMIT 1",
+            [$id]
+        );
+        if (!$row) {
+            return null;
+        }
+        $pid = $row['parent_id'];
+        if ($pid === null || $pid === '' || $pid === false) {
+            return null;
+        }
+        return (int)$pid;
     }
 
     /**

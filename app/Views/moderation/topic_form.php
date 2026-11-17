@@ -5,6 +5,7 @@ $mode = $mode ?? 'create';
 $item = $item ?? [];
 $errors = $errors ?? [];
 $categoryOptions = $categoryOptions ?? [];
+$sectionOptionsByCategory = $sectionOptionsByCategory ?? [];
 $user = $user ?? \App\Services\AuthService::user();
 $blocks = $item['content_blocks'] ?? [];
 if (is_string($blocks)) {
@@ -14,6 +15,17 @@ if (!$blocks && !empty($item['content'])) {
     $blocks = [['type' => 'text', 'md' => $item['content']]];
 }
 $status = $item['status'] ?? 'draft';
+// Текущие значения для двух селектов
+$selectedSectionId = (int)($item['section_id'] ?? $item['category_id'] ?? 0);
+$selectedCategoryId = (int)($item['parent_category_id'] ?? 0);
+if ($selectedCategoryId <= 0 && $selectedSectionId > 0) {
+    foreach ($sectionOptionsByCategory as $pid => $secs) {
+        if (isset($secs[$selectedSectionId])) {
+            $selectedCategoryId = (int)$pid;
+            break;
+        }
+    }
+}
 ?>
 <link rel="stylesheet" href="<?= asset('styles/admin.css'); ?>">
 <main>
@@ -52,17 +64,38 @@ $status = $item['status'] ?? 'draft';
                            value="<?= htmlspecialchars($item['title'] ?? '') ?>"
                            placeholder="Название темы">
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
                     <div class="form-group">
-                        <label>Раздел *</label>
-                        <select name="category_id" required>
-                            <option value="">— Выберите —</option>
+                        <label>Категория *</label>
+                        <select id="topic-category" name="parent_category_id" required>
+                            <option value="">— Выберите категорию —</option>
                             <?php foreach ($categoryOptions as $cid => $ctitle): ?>
-                                <option value="<?= (int)$cid ?>" <?= (int)($item['category_id'] ?? 0) === (int)$cid ? 'selected' : '' ?>>
+                                <option value="<?= (int)$cid ?>" <?= $selectedCategoryId === (int)$cid ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($ctitle) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Раздел *</label>
+                        <select id="topic-section" name="section_id" required <?= $selectedCategoryId <= 0 ? 'disabled' : '' ?>>
+                            <option value="">— Сначала выберите категорию —</option>
+                            <?php
+                            // Рендерим все разделы; JS скроет чужие категории
+                            foreach ($sectionOptionsByCategory as $pid => $secs):
+                                foreach ($secs as $sid => $stitle):
+                            ?>
+                                <option value="<?= (int)$sid ?>"
+                                        data-parent="<?= (int)$pid ?>"
+                                        <?= $selectedSectionId === (int)$sid ? 'selected' : '' ?>
+                                        <?= $selectedCategoryId > 0 && $selectedCategoryId !== (int)$pid ? 'hidden disabled' : '' ?>>
+                                    <?= htmlspecialchars($stitle) ?>
+                                </option>
+                            <?php endforeach; endforeach; ?>
+                        </select>
+                        <?php if (!empty($errors['category_id'])): ?>
+                            <div class="text-danger" style="font-size:12px;margin-top:4px;"><?= htmlspecialchars($errors['category_id']) ?></div>
+                        <?php endif; ?>
                     </div>
                     <div class="form-group">
                         <label>Автор</label>
@@ -70,6 +103,45 @@ $status = $item['status'] ?? 'draft';
                                value="<?= htmlspecialchars(($user['username'] ?? '') . ' · ' . ($user['role_name'] ?? '')) ?>">
                     </div>
                 </div>
+                <script>
+                (function () {
+                    var catSel = document.getElementById('topic-category');
+                    var secSel = document.getElementById('topic-section');
+                    if (!catSel || !secSel) return;
+
+                    function filterSections() {
+                        var parent = catSel.value;
+                        var hasAny = false;
+                        var current = secSel.value;
+                        Array.prototype.forEach.call(secSel.options, function (opt) {
+                            if (!opt.value) {
+                                opt.hidden = false;
+                                opt.disabled = false;
+                                opt.textContent = parent ? '— Выберите раздел —' : '— Сначала выберите категорию —';
+                                return;
+                            }
+                            var match = String(opt.getAttribute('data-parent')) === String(parent);
+                            opt.hidden = !match;
+                            opt.disabled = !match;
+                            if (match) hasAny = true;
+                        });
+                        secSel.disabled = !parent;
+                        // сбрасываем выбор, если текущий раздел не из этой категории
+                        var cur = secSel.options[secSel.selectedIndex];
+                        if (cur && cur.value && cur.disabled) {
+                            secSel.value = '';
+                        }
+                        if (parent && !hasAny) {
+                            // нет разделов в категории
+                            secSel.options[0].textContent = '— В этой категории нет разделов —';
+                        }
+                    }
+
+                    catSel.addEventListener('change', filterSections);
+                    // первичная фильтрация при загрузке (режим редактирования)
+                    filterSections();
+                })();
+                </script>
                 <div class="form-group">
                     <label>Текст темы *</label>
                     <?= Editor::make([

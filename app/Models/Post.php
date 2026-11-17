@@ -24,6 +24,7 @@ class Post extends Model
              LEFT JOIN posts rp ON rp.id = p.reply_to_post_id
              LEFT JOIN users ru ON ru.id = rp.user_id
              WHERE t.slug = ?
+               AND COALESCE(p.status, 'published') NOT IN ('hidden', 'rejected', 'draft')
              ORDER BY p.created_at ASC",
             [$slug]
         );

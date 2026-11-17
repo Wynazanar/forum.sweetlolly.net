@@ -55,6 +55,7 @@ try {
     $sql[] = "CREATE TABLE IF NOT EXISTS roles (
         id          TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         name        VARCHAR(75) NOT NULL UNIQUE,
+        weight SMALLINT UNSIGNED NOT NULL DEFAULT 10,
         permissions JSON NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
@@ -447,13 +448,6 @@ try {
         ALTER TABLE bans
         ADD INDEX idx_bans_type (user_id, type, is_active);";
 
-    $sql[] = "ALTER TABLE roles
-        ADD COLUMN weight SMALLINT UNSIGNED NOT NULL DEFAULT 10 AFTER name;
-
-        UPDATE roles SET weight = 10 WHERE name IN ('player', 'user', 'игрок');
-        UPDATE roles SET weight = 50 WHERE name IN ('moderator', 'модер', 'модератор');
-        UPDATE roles SET weight = 100 WHERE name IN ('admin', 'administrator', 'админ', 'администратор')";
-
     foreach ($sql as $query) {
         $pdo->exec($query);
     }
@@ -541,17 +535,35 @@ try {
     $roleCount = (int) $pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn();
     if ($roleCount === 0) {
         $roles = [
-            ['user', json_encode([
+            ['user', 10, json_encode([
                 'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
                 'delete_own_post' => true, 'react' => true, 'report' => true, 'send_pm' => true,
             ])],
-            ['moderator', json_encode([
+            ['helper', 20, json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'delete_own_post' => true, 'react' => true, 'report' => true, 'send_pm' => true,
+            ])],
+            ['moder', 30, json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'delete_own_post' => true, 'react' => true, 'report' => true, 'send_pm' => true,
+            ])],
+            ['gmoder', 40, json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'delete_own_post' => true, 'react' => true, 'report' => true, 'send_pm' => true,
+            ])],
+            ['curator', 70, json_encode([
                 'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
                 'edit_any_post' => true, 'delete_own_post' => true, 'delete_any_post' => true,
                 'lock_thread' => true, 'move_thread' => true, 'react' => true, 'report' => true,
                 'resolve_report' => true, 'ban_user' => true, 'send_pm' => true,
             ])],
-            ['admin', json_encode([
+            ['developer', 90, json_encode([
+                'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
+                'edit_any_post' => true, 'delete_own_post' => true, 'delete_any_post' => true,
+                'lock_thread' => true, 'move_thread' => true, 'react' => true, 'report' => true,
+                'resolve_report' => true, 'ban_user' => true, 'send_pm' => true,
+            ])],
+            ['admin', 100, json_encode([
                 'create_thread' => true, 'create_post' => true, 'edit_own_post' => true,
                 'edit_any_post' => true, 'delete_own_post' => true, 'delete_any_post' => true,
                 'lock_thread' => true, 'move_thread' => true, 'delete_thread' => true,
@@ -559,7 +571,7 @@ try {
                 'manage_categories' => true, 'manage_roles' => true, 'send_pm' => true, 'view_logs' => true,
             ])],
         ];
-        $stmt = $pdo->prepare('INSERT INTO roles (name, permissions) VALUES (?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO roles (name, weight, permissions) VALUES (?, ?, ?)');
         foreach ($roles as $r) {
             $stmt->execute($r);
         }
@@ -572,7 +584,7 @@ try {
 
         $users = [
             // id 1 — админ
-            ['Admin',       'admin@forum.local',    $passwordHash, null, 3, 12, date('Y-m-d H:i:s', strtotime('-60 days')), date('Y-m-d H:i:s')],
+            ['Wynazanar',       'wynazanar@forum.local',    $passwordHash, null, 3, 12, date('Y-m-d H:i:s', strtotime('-60 days')), date('Y-m-d H:i:s')],
             // id 2 — модератор
             ['Moderator',   'mod@forum.local',      $passwordHash, null, 2, 8,  date('Y-m-d H:i:s', strtotime('-45 days')), date('Y-m-d H:i:s', strtotime('-1 hour'))],
             // обычные пользователи
@@ -759,39 +771,6 @@ try {
         $stmt = $pdo->prepare('INSERT INTO notifications (user_id, type, data, is_read) VALUES (?, ?, ?, ?)');
         foreach ($notifications as $n) {
             $stmt->execute($n);
-        }
-    }
-
-    // --- Логи ---
-    $logCount = (int) $pdo->query('SELECT COUNT(*) FROM activity_logs')->fetchColumn();
-    if ($logCount === 0) {
-        $logs = [
-            [1, 'created_thread', 'success', 'thread', 1, 'Добро пожаловать на форум!', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['title' => 'Добро пожаловать на форум!', 'slug' => 'dobro-pozhalovat'], JSON_UNESCAPED_UNICODE), null],
-            [1, 'created_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['title' => 'Правила форума и сервера', 'slug' => 'pravila-foruma'], JSON_UNESCAPED_UNICODE), null],
-            [3, 'created_thread', 'success', 'thread', 3, 'Тема пользователя #3', '192.168.1.10', 'Mozilla/5.0', null, null],
-            [2, 'locked_thread', 'success', 'thread', 2, 'Правила форума и сервера', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['before' => ['is_locked' => 0], 'after' => ['is_locked' => 1]], JSON_UNESCAPED_UNICODE), 'Закрыто по правилам'],
-            [6, 'created_thread', 'success', 'thread', 6, 'Тема пользователя #6', '10.0.0.5', 'Mozilla/5.0', null, null],
-            [2, 'banned_user', 'success', 'user', 9, 'Пользователь #9', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['reason' => 'Спам и оскорбления', 'before' => ['is_banned' => 0], 'after' => ['is_banned' => 1]], JSON_UNESCAPED_UNICODE), null],
-            [3, 'created_post', 'success', 'post', 14, 'Пост #14', '192.168.1.10', 'Mozilla/5.0',
-                json_encode(['thread_id' => 3], JSON_UNESCAPED_UNICODE), null],
-            [4, 'created_report', 'success', 'report', 1, 'Репорт #1 (пост)', '10.0.0.8', 'Mozilla/5.0',
-                json_encode(['reason' => 'Флуд', 'target_type' => 'post', 'target_id' => 12], JSON_UNESCAPED_UNICODE), null],
-            [2, 'opened_report', 'success', 'report', 1, 'Репорт #1 (пост)', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['before' => ['status' => 'pending'], 'after' => ['status' => 'in_progress']], JSON_UNESCAPED_UNICODE), 'Взял в работу'],
-            [2, 'resolved_report', 'success', 'report', 1, 'Репорт #1 (пост)', '127.0.0.1', 'Mozilla/5.0',
-                json_encode(['before' => ['status' => 'in_progress'], 'after' => ['status' => 'resolved']], JSON_UNESCAPED_UNICODE), 'Пост удалён, нарушитель предупреждён'],
-        ];
-        $stmt = $pdo->prepare(
-            'INSERT INTO activity_logs
-                (user_id, action, result, target_type, target_id, object_title, ip, user_agent, data, comment)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        foreach ($logs as $l) {
-            $stmt->execute($l);
         }
     }
 

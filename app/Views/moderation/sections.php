@@ -1,3 +1,10 @@
+<?php
+use App\Components\AdminTable;
+use App\Models\Role;
+use App\Services\AuthService;
+
+$canManageSections = AuthService::can('manage_categories');
+?>
 <main>
     <div class="container">
         <div class="page-header flex">
@@ -5,13 +12,12 @@
                 <h2>Разделы</h2>
                 <p>Структура форума: категории, вложенные разделы, доступ и порядок отображения.</p>
             </div>
+            <?php if ($canManageSections): ?>
             <a href="<?= url('moderation/sections/create') ?>" class="btn btn-primary">＋ Создать раздел</a>
+            <?php endif; ?>
         </div>
 
         <?php
-        use App\Components\AdminTable;
-        use App\Models\Role;
-
         $roleOptions = $roleOptions ?? (new Role())->getOptions(); // id => label
 
         // options для фильтра: '' = Публичный + роли
@@ -132,13 +138,14 @@
             [
                 'key'    => 'actions',
                 'label'  => 'Действия',
-                'render' => function (array $row): string {
-                    if ($row['is_category'] ?? false) {
-                        return '<a href="'.url('/moderation/sections/create?parent=' . $row['id']) . '" class="btn-link">+ Раздел</a>
-                                <button class="btn-icon" data-action="more">⋯</button>';
+                'render' => function (array $row) use ($canManageSections): string {
+                    if (!$canManageSections) {
+                        return '<span class="text-muted" style="font-size:12px;">—</span>';
                     }
-                    return '<a href="'.url('/moderation/sections/edit/' . $row['id']) . '" class="btn-link">Изменить</a>
-                            <button class="btn-icon" data-action="more">⋯</button>';
+                    if ($row['is_category'] ?? false) {
+                        return '<a href="'.url('/moderation/sections/create?parent=' . $row['id']) . '" class="btn-link">+ Раздел</a>';
+                    }
+                    return '<a href="'.url('/moderation/sections/edit/' . $row['id']) . '" class="btn-link">Изменить</a>';
                 },
             ],
         ];
@@ -281,6 +288,7 @@
                         Изменение доступа применяется к разделу и его темам. Закрытые материалы не видны гостям.
                     </div>
 
+                    <?php if ($canManageSections): ?>
                     <div class="detail-actions">
                         <a href="<?= url('moderation/sections/edit/'.(int)$selected['id']) ?>" class="btn btn-secondary">
                             Изменить <?= $isCategory ? 'категорию' : 'раздел' ?>
@@ -301,6 +309,7 @@
                             </button>
                         </form>
                     </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </aside>
         </div>

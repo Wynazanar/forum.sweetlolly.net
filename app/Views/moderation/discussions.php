@@ -4,7 +4,7 @@ $selected=$selected??null;$posts=$posts??['items'=>[],'total'=>0,'page'=>1,'page
 $filters=$filters??[];$categories=$categories??[];$reports=$reports??[];$pendingQueue=$pendingQueue??['items'=>[],'total'=>0,'page'=>1,'pages'=>1];
 $queueMode=$queueMode??false;$pendingCount=(int)($pendingCount??0);
 $h=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');
-$badge=static function($s){$m=['draft'=>'Черновик','pending'=>'На проверке','published'=>'Опубликовано','rejected'=>'Отклонено'];return $m[$s]??$s;};
+$badge=static function($s){$m=['draft'=>'Черновик','pending'=>'На проверке','published'=>'Опубликовано','rejected'=>'Отклонено','hidden'=>'Скрыто'];return $m[$s]??$s;};
 $threadStateLabels=static function($thread){$labels=[];if(!empty($thread['is_hidden']))$labels[]='Скрыта';if(!empty($thread['is_locked']))$labels[]='Закрыта';if(!empty($thread['is_sticky']))$labels[]='Закреплена';return $labels;};
 $base=url('/moderation/discussions');
 $clean=array_filter($filters,static fn($v)=>$v!==''&&$v!==null&&$v!==0);
@@ -66,7 +66,7 @@ $makeUrl=static function(array $changes=[])use($base,$clean,$selected,$queueMode
      </div>
     </div>
     <div class="disc-panel disc-posts-panel"><div class="disc-panel-head"><strong>Сообщения</strong><span><?= (int)$posts['total'] ?> · <?= (int)$posts['page'] ?>/<?= (int)$posts['pages'] ?></span></div>
-     <form class="disc-post-filter" method="get" action="<?= $base ?>"><input type="hidden" name="id" value="<?= (int)$selected['id'] ?>"><?php if($queueMode): ?><input type="hidden" name="queue" value="pending"><?php endif ?><select name="post_status"><option value="">Все статусы сообщений</option><?php foreach(['draft','pending','published','rejected'] as $s): ?><option value="<?= $s ?>" <?= ($filters['post_status']??'')===$s?'selected':'' ?>><?= $badge($s) ?></option><?php endforeach ?></select><label><input type="checkbox" name="reported" value="1" <?= ($filters['reported']??'')==='1'?'checked':'' ?>> С жалобами</label><button class="admin-btn" type="submit">Применить</button></form>
+     <form class="disc-post-filter" method="get" action="<?= $base ?>"><input type="hidden" name="id" value="<?= (int)$selected['id'] ?>"><?php if($queueMode): ?><input type="hidden" name="queue" value="pending"><?php endif ?><select name="post_status"><option value="">Все статусы сообщений</option><?php foreach(['draft','pending','published','rejected','hidden'] as $s): ?><option value="<?= $s ?>" <?= ($filters['post_status']??'')===$s?'selected':'' ?>><?= $badge($s) ?></option><?php endforeach ?></select><label><input type="checkbox" name="reported" value="1" <?= ($filters['reported']??'')==='1'?'checked':'' ?>> С жалобами</label><button class="admin-btn" type="submit">Применить</button></form>
      <?php foreach($posts['items'] as $p): ?>
       <article class="disc-post" id="post-<?= (int)$p['id'] ?>">
        <div class="disc-post-meta"><div><strong><?= $h($p['username']) ?></strong><small><?= $h($p['created_at']) ?> · #<?= (int)$p['id'] ?></small></div><em class="disc-pill <?= $h($p['status']) ?>"><?= $h($badge($p['status'])) ?></em></div>
@@ -84,15 +84,21 @@ $makeUrl=static function(array $changes=[])use($base,$clean,$selected,$queueMode
           </form>
          </details>
         <?php endif ?>
-        <?php if(($canModerate??false) && !empty($p['can_moderate_by_actor'])): ?><form method="post" action="<?= url('/moderation/discussions/post-status/'.(int)$p['id']) ?>"><input type="hidden" name="thread_id" value="<?= (int)$selected['id'] ?>"><select name="status"><?php foreach(['published','pending','rejected','draft'] as $s): ?><option value="<?= $s ?>" <?= $p['status']===$s?'selected':'' ?>><?= $badge($s) ?></option><?php endforeach ?></select><button class="admin-btn" type="submit">Сохранить статус</button></form><?php endif ?>
-        <?php if(!empty($p['can_delete_by_actor'])): ?>
-         <form method="post" action="<?= url('/moderation/discussions/post-delete/'.(int)$p['id']) ?>" onsubmit="return confirm('Удалить это сообщение?')">
+        <?php if(($canModerate??false) && !empty($p['can_moderate_by_actor'])): ?><form method="post" action="<?= url('/moderation/discussions/post-status/'.(int)$p['id']) ?>"><input type="hidden" name="thread_id" value="<?= (int)$selected['id'] ?>"><select name="status"><?php foreach(['published','pending','rejected','draft','hidden'] as $s): ?><option value="<?= $s ?>" <?= ($p['status']??'')===$s?'selected':'' ?>><?= $badge($s) ?></option><?php endforeach ?></select><button class="admin-btn" type="submit">Сохранить статус</button></form><?php endif ?>
+        <?php if(!empty($p['can_delete_by_actor']) || !empty($p['can_restore_by_actor'])): ?>
+         <?php $isHiddenPost = ($p['status'] ?? '') === 'hidden'; ?>
+         <form method="post" action="<?= url('/moderation/discussions/post-delete/'.(int)$p['id']) ?>" onsubmit="return confirm('<?= $isHiddenPost ? 'Восстановить это сообщение?' : 'Скрыть это сообщение? Контент сохранится, сообщение станет видно только модераторам с правом просмотра скрытых.' ?>')">
           <input type="hidden" name="thread_id" value="<?= (int)$selected['id'] ?>">
-          <button class="admin-btn admin-btn-danger" type="submit">Удалить сообщение</button>
+          <?php if($isHiddenPost): ?>
+           <input type="hidden" name="restore" value="1">
+           <button class="admin-btn admin-btn-primary" type="submit">Восстановить сообщение</button>
+          <?php else: ?>
+           <button class="admin-btn admin-btn-danger" type="submit">Скрыть сообщение</button>
+          <?php endif ?>
          </form>
         <?php endif ?>
         <?php if(!empty($p['can_punish_by_actor'])): ?>
-         <details class="disc-punish-details">
+         <details class="disc-punish-details" open>
           <summary class="admin-btn admin-btn-danger">Выдать наказание автору</summary>
           <form class="disc-punish-form" method="post" action="<?= url('/moderation/discussions/punish-post/'.(int)$p['id']) ?>">
            <input type="hidden" name="thread_id" value="<?= (int)$selected['id'] ?>">

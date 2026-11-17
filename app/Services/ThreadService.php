@@ -58,9 +58,22 @@ class ThreadService
         return $thread;
     }
 
+    /** Категории верхнего уровня (для первого селекта). */
     public function categoryOptions(): array
     {
         return $this->sections->getCategoryOptions();
+    }
+
+    /** Разделы, сгруппированные по category_id: [ parentId => [ sectionId => title ] ]. */
+    public function sectionOptionsByCategory(): array
+    {
+        return $this->sections->getSectionOptionsByCategory();
+    }
+
+    /** Плоский список «Категория → Раздел» (фильтры, отображение). */
+    public function sectionOptionsFlat(): array
+    {
+        return $this->sections->getSectionOptionsFlat();
     }
 
     /**
@@ -367,10 +380,15 @@ class ThreadService
 
     private function prepare(array $input, ?int $id = null): array
     {
+        // Форма шлёт section_id (второй селект); оставляем поддержку category_id для совместимости
+        $sectionId = (int)($input['section_id'] ?? 0);
+        if ($sectionId <= 0) {
+            $sectionId = (int)($input['category_id'] ?? 0);
+        }
         return [
             'title'       => trim($input['title'] ?? ''),
             'slug'        => trim($input['slug'] ?? ''),
-            'category_id' => (int)($input['category_id'] ?? 0),
+            'category_id' => $sectionId,
             'is_sticky'   => !empty($input['is_sticky']),
             'is_locked'   => !empty($input['is_locked']),
             'is_hidden'   => !empty($input['is_hidden']),
@@ -386,6 +404,9 @@ class ThreadService
         }
         if ($data['category_id'] <= 0) {
             $errors['category_id'] = 'Выберите раздел';
+        } elseif (!$this->sections->isSection((int)$data['category_id'])) {
+            // Тема должна жить в разделе, а не в «голой» категории
+            $errors['category_id'] = 'Выберите раздел внутри категории, а не саму категорию';
         }
         if ($data['slug'] !== '') {
             $existing = $this->threads->findBySlug($data['slug']);

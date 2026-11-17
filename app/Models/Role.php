@@ -8,7 +8,7 @@ class Role extends Model
     public function getAll(): array
     {
         $rows = $this->findMany(
-            "SELECT id, name, permissions FROM roles ORDER BY id"
+            "SELECT id, name, permissions, COALESCE(weight, 10) AS weight FROM roles ORDER BY weight DESC, id"
         );
 
         foreach ($rows as &$row) {
@@ -35,7 +35,7 @@ class Role extends Model
     public function findById(int $id): ?array
     {
         $row = $this->findOne(
-            "SELECT id, name, permissions FROM roles WHERE id = ?",
+            "SELECT id, name, permissions, COALESCE(weight, 10) AS weight FROM roles WHERE id = ?",
             [$id]
         );
         if (!$row) {
@@ -73,21 +73,38 @@ class Role extends Model
         return $options;
     }
 
-    public function create(string $name, array $permissions): int
+    public function create(string $name, array $permissions, int $weight = 10): int
     {
-        $this->execute(
-            "INSERT INTO roles (name, permissions) VALUES (?, ?)",
-            [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE)]
-        );
+        $weight = max(1, min(255, $weight));
+        try {
+            $this->execute(
+                "INSERT INTO roles (name, permissions, weight) VALUES (?, ?, ?)",
+                [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE), $weight]
+            );
+        } catch (\Throwable $e) {
+            // колонка weight ещё не добавлена — fallback
+            $this->execute(
+                "INSERT INTO roles (name, permissions) VALUES (?, ?)",
+                [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE)]
+            );
+        }
         return (int)$this->lastInsertId();
     }
 
-    public function updateRole(int $id, string $name, array $permissions): bool
+    public function updateRole(int $id, string $name, array $permissions, int $weight = 10): bool
     {
-        $this->execute(
-            "UPDATE roles SET name = ?, permissions = ? WHERE id = ?",
-            [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE), $id]
-        );
+        $weight = max(1, min(255, $weight));
+        try {
+            $this->execute(
+                "UPDATE roles SET name = ?, permissions = ?, weight = ? WHERE id = ?",
+                [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE), $weight, $id]
+            );
+        } catch (\Throwable $e) {
+            $this->execute(
+                "UPDATE roles SET name = ?, permissions = ? WHERE id = ?",
+                [$name, json_encode($permissions, JSON_UNESCAPED_UNICODE), $id]
+            );
+        }
         return $this->affectedRows() >= 0;
     }
 

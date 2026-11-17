@@ -47,6 +47,7 @@ return [
             'discussions.lock'        => 'Закрывать / открывать обсуждения',
             'discussions.hide'        => 'Скрывать обсуждения',
             'discussions.edit_any'    => 'Редактировать сообщения других пользователей',
+            'discussions.view_hidden' => 'Просматривать скрытые сообщения',
         ],
     ],
     'moderation' => [

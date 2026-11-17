@@ -68,7 +68,7 @@ class RoleService
             return ['ok' => false, 'errors' => $errors];
         }
 
-        $id = $this->model->create($data['name'], $data['permissions']);
+        $id = $this->model->create($data['name'], $data['permissions'], $data['weight']);
 
         $userId = AuthService::user()['id'] ?? null;
         if ($userId) {
@@ -107,10 +107,34 @@ class RoleService
             return ['ok' => false, 'errors' => $errors];
         }
 
-        $this->model->updateRole($id, $data['name'], $data['permissions']);
+        $this->model->updateRole($id, $data['name'], $data['permissions'], $data['weight']);
 
         $userId = AuthService::user()['id'] ?? null;
         if ($userId) {
+            $beforePerms = array_values(array_keys(array_filter($old['permissions'] ?? [])));
+            $afterPerms  = array_values(array_keys(array_filter($data['permissions'])));
+            sort($beforePerms);
+            sort($afterPerms);
+            $added   = array_values(array_diff($afterPerms, $beforePerms));
+            $removed = array_values(array_diff($beforePerms, $afterPerms));
+            $oldWeight = (int)($old['weight'] ?? 0);
+            $newWeight = (int)($data['weight'] ?? 0);
+
+            $parts = [];
+            if ($added) {
+                $parts[] = 'добавлено: ' . implode(', ', $added);
+            }
+            if ($removed) {
+                $parts[] = 'убрано: ' . implode(', ', $removed);
+            }
+            if ($oldWeight !== $newWeight) {
+                $parts[] = 'вес: ' . $oldWeight . ' → ' . $newWeight;
+            }
+            if (!$parts) {
+                $parts[] = 'без изменений прав';
+            }
+            $summary = implode('; ', $parts);
+
             ActivityLogService::log(
                 (int)$userId,
                 'updated_role',
@@ -119,9 +143,14 @@ class RoleService
                 $id,
                 $data['name'],
                 [
-                    'before' => array_keys(array_filter($old['permissions'] ?? [])),
-                    'after'  => array_keys(array_filter($data['permissions'])),
-                ]
+                    'added'   => $added,
+                    'removed' => $removed,
+                    'weight'  => ['before' => $oldWeight, 'after' => $newWeight],
+                    'before'  => $beforePerms,
+                    'after'   => $afterPerms,
+                    'summary' => $summary,
+                ],
+                $summary
             );
         }
 
@@ -170,9 +199,14 @@ class RoleService
             $permissions[$key] = !empty($raw[$key]);
         }
 
+        $weight = (int)($input['weight'] ?? 10);
+        if ($weight < 1) $weight = 1;
+        if ($weight > 255) $weight = 255;
+
         return [
             'name'        => $name,
             'permissions' => $permissions,
+            'weight'      => $weight,
         ];
     }
 

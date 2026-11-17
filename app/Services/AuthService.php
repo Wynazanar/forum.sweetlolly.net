@@ -44,6 +44,21 @@ class AuthService
     /**
      * Проверка конкретного права
      */
+    /** Имена ролей, которые считаются администраторами (полный доступ). */
+    private static array $adminRoleNames = [
+        'admin', 'administrator', 'админ', 'администратор', 'root', 'owner',
+    ];
+
+    public static function isAdmin(): bool
+    {
+        $user = self::user();
+        if (!$user) {
+            return false;
+        }
+        $name = mb_strtolower(trim((string)($user['role_name'] ?? '')));
+        return in_array($name, self::$adminRoleNames, true);
+    }
+
     public static function can(string $permission): bool
     {
         $user = self::user();
@@ -52,10 +67,8 @@ class AuthService
             return false;
         }
 
-        // Роль администратора является системной ролью с полным доступом.
-        // Ранее разные контроллеры добавляли этот обход вручную, а шаблоны
-        // часто забывали его, из-за чего кнопки исчезали при доступном POST.
-        if (($user['role_name'] ?? '') === 'admin') {
+        // Роль администратора (admin / администратор / root / owner и т.д.) — полный доступ.
+        if (self::isAdmin()) {
             return true;
         }
 
@@ -76,23 +89,25 @@ class AuthService
             'applications.review'         => ['resolve_report'],
             'applications.forms.manage'   => ['resolve_report', 'manage_categories'],
             'applications.layouts.manage' => ['resolve_report', 'manage_categories'],
-            'players.view'                => ['ban_user', 'players.edit_role'],
-            'players.create'              => ['players.edit_role', 'manage_roles'],
-            'players.edit'                => ['players.edit_role', 'ban_user'],
-            'players.edit_role'           => ['manage_roles', 'ban_user'],
-            'players.deactivate'          => ['ban_user', 'manage_roles'],
+            // players.* — только явные права или legacy ban_user; create НЕ наследуется от manage_roles
+            'players.view'                => ['ban_user'],
+            'players.create'              => [],
+            'players.edit'                => ['ban_user'],
+            'players.edit_role'           => ['manage_roles'],
+            'players.deactivate'          => ['ban_user'],
             'players.ban'                 => ['ban_user'],
             'players.mute'                => ['ban_user'],
             'players.restrict'            => ['ban_user'],
+            // threads.* — без «lock_thread открывает pin/move/edit/hide»
             'threads.view_mod'            => ['lock_thread', 'move_thread', 'delete_thread'],
             'discussions.view_drafts'     => [],
-            'threads.publish'             => ['lock_thread', 'delete_thread'],
-            'threads.moderate'            => ['lock_thread', 'delete_thread'],
-            'threads.pin'                 => ['lock_thread'],
+            'threads.publish'             => [],
+            'threads.moderate'            => [],
+            'threads.pin'                 => [],
             'threads.lock'                => ['lock_thread'],
-            'threads.move'                => ['move_thread', 'lock_thread'],
-            'threads.hide'                => ['lock_thread', 'delete_thread'],
-            'threads.edit_any'            => ['lock_thread', 'delete_thread', 'edit_any_post'],
+            'threads.move'                => ['move_thread'],
+            'threads.hide'                => ['delete_thread'],
+            'threads.edit_any'            => ['edit_any_post'],
             'discussions.edit_any'        => ['edit_any_post'],
             'discussions.reply'           => ['create_post'],
             'posts.attach'                => ['create_post', 'create_thread'],
@@ -107,12 +122,24 @@ class AuthService
     }
 
     /**
-     * Проверка роли
+     * Проверка роли (точное совпадение или админ-синоним)
      */
     public static function hasRole(string $roleName): bool
     {
         $user = self::user();
-        return $user && ($user['role_name'] ?? '') === $roleName;
+        if (!$user) {
+            return false;
+        }
+        $current = mb_strtolower(trim((string)($user['role_name'] ?? '')));
+        $wanted  = mb_strtolower(trim($roleName));
+        if ($current === $wanted) {
+            return true;
+        }
+        // Если спрашивают 'admin' — принимаем любые админ-синонимы
+        if ($wanted === 'admin' && in_array($current, self::$adminRoleNames, true)) {
+            return true;
+        }
+        return false;
     }
 
     /**

@@ -19,11 +19,12 @@ class TopicController extends Controller
         $this->guard('create_thread');
         $this->title = 'Создать тему | Модерация';
         return $this->render('moderation/topic_form', [
-            'mode'             => 'create',
-            'item'             => [],
-            'categoryOptions'  => $this->service->categoryOptions(),
-            'errors'           => [],
-            'user'             => AuthService::user(),
+            'mode'                    => 'create',
+            'item'                    => [],
+            'categoryOptions'         => $this->service->categoryOptions(),
+            'sectionOptionsByCategory'=> $this->service->sectionOptionsByCategory(),
+            'errors'                  => [],
+            'user'                    => AuthService::user(),
         ]);
     }
 
@@ -38,11 +39,12 @@ class TopicController extends Controller
         if (!$result['ok']) {
             $this->title = 'Создать тему | Модерация';
             return $this->render('moderation/topic_form', [
-                'mode'            => 'create',
-                'item'            => $_POST,
-                'categoryOptions' => $this->service->categoryOptions(),
-                'errors'          => $result['errors'] ?? [],
-                'user'            => AuthService::user(),
+                'mode'                    => 'create',
+                'item'                    => $_POST,
+                'categoryOptions'         => $this->service->categoryOptions(),
+                'sectionOptionsByCategory'=> $this->service->sectionOptionsByCategory(),
+                'errors'                  => $result['errors'] ?? [],
+                'user'                    => AuthService::user(),
             ]);
         }
         $qid = (int)$result['id'];
@@ -64,12 +66,15 @@ class TopicController extends Controller
             exit;
         }
         $this->title = 'Тема: ' . ($item['title'] ?? '') . ' | Модерация';
+        // Для формы: parent category + section
+        $item['parent_category_id'] = (new \App\Models\Section())->getParentId((int)($item['category_id'] ?? 0));
         return $this->render('moderation/topic_form', [
-            'mode'            => 'edit',
-            'item'            => $item,
-            'categoryOptions' => $this->service->categoryOptions(),
-            'errors'          => [],
-            'user'            => AuthService::user(),
+            'mode'                    => 'edit',
+            'item'                    => $item,
+            'categoryOptions'         => $this->service->categoryOptions(),
+            'sectionOptionsByCategory'=> $this->service->sectionOptionsByCategory(),
+            'errors'                  => [],
+            'user'                    => AuthService::user(),
         ]);
     }
 
@@ -84,12 +89,14 @@ class TopicController extends Controller
         $result = $this->service->update($id, $_POST);
         if (!$result['ok']) {
             $item = $this->service->find($id) ?? $_POST;
+            $item['parent_category_id'] = (new \App\Models\Section())->getParentId((int)($item['category_id'] ?? 0));
             $this->title = 'Редактирование темы | Модерация';
             return $this->render('moderation/topic_form', [
-                'mode'            => 'edit',
-                'item'            => $item,
-                'categoryOptions' => $this->service->categoryOptions(),
-                'errors'          => $result['errors'] ?? [],
+                'mode'                    => 'edit',
+                'item'                    => $item,
+                'categoryOptions'         => $this->service->categoryOptions(),
+                'sectionOptionsByCategory'=> $this->service->sectionOptionsByCategory(),
+                'errors'                  => $result['errors'] ?? [],
             ]);
         }
         header('Location: ' . url('/moderation/topics') . '?id=' . $id);
@@ -98,7 +105,7 @@ class TopicController extends Controller
 
     public function lock(array $params = [])
     {
-        $this->guard('threads.lock');
+        $this->guardAny(['threads.lock', 'lock_thread']);
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $locked = !empty($_POST['locked']);
@@ -122,7 +129,7 @@ class TopicController extends Controller
 
     public function move(array $params = [])
     {
-        $this->guard('threads.move');
+        $this->guardAny(['threads.move', 'move_thread']);
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $cat = (int)($_POST['category_id'] ?? 0);
@@ -136,7 +143,7 @@ class TopicController extends Controller
 
     public function hide(array $params = [])
     {
-        $this->guard('threads.hide');
+        $this->guardAny(['threads.hide', 'delete_thread']);
         $id = (int)($params['id'] ?? 0);
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
             $this->service->hide($id, !empty($_POST['hidden']));
@@ -147,13 +154,26 @@ class TopicController extends Controller
 
     private function guard(string $perm = 'threads.view_mod'): void
     {
-        if (!AuthService::check() || (
-            !AuthService::can($perm)
-            && !AuthService::hasRole('admin')
-        )) {
+        if (!AuthService::check() || !AuthService::can($perm)) {
             header('Location: ' . url('/'));
             exit;
         }
+    }
+
+    /** Любое из перечисленных прав (для legacy-ключей). */
+    private function guardAny(array $perms): void
+    {
+        if (!AuthService::check()) {
+            header('Location: ' . url('/'));
+            exit;
+        }
+        foreach ($perms as $perm) {
+            if (AuthService::can($perm)) {
+                return;
+            }
+        }
+        header('Location: ' . url('/'));
+        exit;
     }
 
     public function moderate(array $params = [])

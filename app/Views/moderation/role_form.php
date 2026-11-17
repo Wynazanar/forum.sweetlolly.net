@@ -43,6 +43,12 @@ $isSystem = $mode === 'edit' && in_array($item['name'] ?? '', ['user', 'moderato
                                <?= $isSystem ? 'readonly' : '' ?>
                                placeholder="helper">
                     </div>
+                    <div class="form-group">
+                        <label>Вес роли (иерархия) * <span class="text-muted">1–255. Чем выше — тем выше в иерархии. Админ ≈ 100, модератор ≈ 50, игрок ≈ 10</span></label>
+                        <input type="number" name="weight" required min="1" max="255" step="1"
+                               value="<?= (int)($item['weight'] ?? 10) ?>"
+                               placeholder="10">
+                    </div>
                 </div>
 
                 <?php foreach ($catalog as $groupKey => $group): ?>

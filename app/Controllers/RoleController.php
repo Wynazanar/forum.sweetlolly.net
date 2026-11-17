@@ -22,6 +22,7 @@ class RoleController extends Controller
             'mode'      => 'create',
             'item'      => [
                 'name'        => '',
+                'weight'      => 10,
                 'permissions' => [],
             ],
             'catalog'   => $this->service->catalog(),
@@ -48,6 +49,7 @@ class RoleController extends Controller
                 'mode'    => 'create',
                 'item'    => [
                     'name'        => trim($_POST['name'] ?? ''),
+                    'weight'      => (int)($_POST['weight'] ?? 10),
                     'permissions' => $_POST['permissions'] ?? [],
                 ],
                 'catalog' => $this->service->catalog(),
@@ -100,6 +102,7 @@ class RoleController extends Controller
         if (!$result['ok']) {
             $item = $this->service->find($id) ?? [];
             $item['name'] = trim($_POST['name'] ?? ($item['name'] ?? ''));
+            $item['weight'] = (int)($_POST['weight'] ?? ($item['weight'] ?? 10));
             $item['permissions'] = $_POST['permissions'] ?? [];
 
             $data = [

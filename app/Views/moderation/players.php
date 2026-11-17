@@ -11,30 +11,40 @@ $pages       = (int)($pages ?? 1);
 $roleOptions = $roleOptions ?? [];
 $roleModel   = new Role();
 
-$auth = \App\Services\AuthService::class;
-$canCreate     = $auth::can('players.create') || $auth::hasRole('admin');
-$canEdit       = $auth::can('players.edit') || $auth::hasRole('admin');
-$canEditRole   = $auth::can('players.edit_role') || $auth::hasRole('admin');
-$canDeactivate = $auth::can('players.deactivate') || $auth::hasRole('admin');
-$canBan        = $auth::can('players.ban') || $auth::hasRole('admin');
-$canMute       = $auth::can('players.mute') || $auth::hasRole('admin');
-$canRestrict   = $auth::can('players.restrict') || $auth::hasRole('admin');
+// can() уже учитывает isAdmin() — отдельные hasRole('admin') не нужны
+$canCreate     = \App\Services\AuthService::can('players.create');
+$canEdit       = \App\Services\AuthService::can('players.edit');
+$canEditRole   = \App\Services\AuthService::can('players.edit_role');
+$canDeactivate = \App\Services\AuthService::can('players.deactivate');
+$canBan        = \App\Services\AuthService::can('players.ban');
+$canMute       = \App\Services\AuthService::can('players.mute');
+$canRestrict   = \App\Services\AuthService::can('players.restrict');
+$canViewLogs   = \App\Services\AuthService::can('view_logs');
+$canExport     = \App\Services\AuthService::can('players.view') && \App\Services\AuthService::isAdmin();
 
 $columns = [
     [
         'key'    => 'username',
         'label'  => 'Игрок',
         'render' => function (array $row) use ($roleModel): string {
-            $name = htmlspecialchars($row['username'] ?? '');
-            $id   = (int)($row['id'] ?? 0);
-            $av   = $row['avatar'] ?? null;
-            $letter = htmlspecialchars(mb_strtoupper(mb_substr($row['username'] ?? '?', 0, 1)));
-            $avatarHtml = $av
-                ? '<img src="' . htmlspecialchars(url(ltrim((string)$av, '/'))) . '" alt="" class="player-av">'
+            $rawName = (string)($row['username'] ?? '');
+            $name    = htmlspecialchars($rawName);
+            $id      = (int)($row['id'] ?? 0);
+            $letter  = htmlspecialchars(mb_strtoupper(mb_substr($rawName !== '' ? $rawName : '?', 0, 1)));
+            // Бюст скина Minecraft по нику (nmsr.nickac.dev)
+            $bust = $rawName !== ''
+                ? 'https://nmsr.nickac.dev/bust/' . rawurlencode($rawName)
+                : '';
+            $avatarHtml = $bust !== ''
+                ? '<img src="' . htmlspecialchars($bust) . '" alt="" class="player-av" loading="lazy"'
+                  . ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\';">'
+                  . '<span class="player-av player-av--ph" style="display:none">' . $letter . '</span>'
                 : '<span class="player-av player-av--ph">' . $letter . '</span>';
-            return $avatarHtml
+            return 
+                "<div style='display: flex; align-items: start;'>"
+                . $avatarHtml
                 . '<div><strong>' . $name . '</strong>'
-                . '<div class="text-muted" style="font-size:12px;">ID ' . $id . '</div></div>';
+                . '<div class="text-muted" style="font-size:12px;">ID F-' . str_pad((string)$id, 3, '0', STR_PAD_LEFT) . '</div></div></div>';
         },
     ],
     [
@@ -67,7 +77,7 @@ $columns = [
             if (!empty($row['is_banned'])) {
                 $bits[] = '<span class="badge badge-danger">Бан</span>';
             }
-            return $bits ? implode(' ', $bits) : '<span class="text-muted">Нет</span>';
+            return $bits ? implode(' ', $bits) : '<span class="text-muted">—</span>';
         },
     ],
 ];
@@ -83,7 +93,7 @@ $filterConfig = [
     [
         'name'    => 'banned',
         'type'    => 'select',
-        'empty'   => 'Бан',
+        'empty'   => 'Наказание',
         'options' => ['0' => 'Без бана', '1' => 'Забанены'],
     ],
     [
@@ -109,17 +119,32 @@ $table = AdminTable::make(
 );
 ?>
 <style>
-.player-av {
-    width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
-    display: inline-flex; align-items: center; justify-content: center;
-    margin-right: 10px; vertical-align: middle;
+.text-muted {
+    color: var(--muted);
 }
-.player-av--ph { background: #7c5cfc; color: #fff; font-weight: 700; font-size: 14px; }
-.players-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+.player-av {
+    width: 40px; height: 40px; border-radius: 10px; object-fit: cover;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-right: 10px; vertical-align: middle; flex-shrink: 0;
+}
+.player-av--ph { background: #7c5cfc; color: #fff; font-weight: 700; font-size: 14px; border-radius: 50%; }
+.player-av--lg { width: 52px; height: 52px; font-size: 18px; margin-right: 12px; border-radius: 12px; }
+.players-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
 @media (max-width: 960px) { .players-layout { grid-template-columns: 1fr; } }
 .player-card .meta-row { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0; font-size: 13px; }
 .player-card .meta-row span:first-child { color: var(--muted, #999); }
+.player-card .role-badge {
+    display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    background: rgba(124,92,252,.18); color: var(--accent-deep);
+}
+.player-card .card-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.player-card .card-actions .btn { width: 100%; text-align: center; }
+.player-card .card-note { font-size: 12px; color: var(--muted,#999); margin: 10px 0 0; line-height: 1.4; }
 .sanction-item { font-size: 13px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,.12); margin-bottom: 6px; }
+.pagination-ellipsis { padding: 0 6px; opacity: .5; user-select: none; }
+.pagination-nav { min-width: 28px; text-align: center; }
+.pagination-nav.is-disabled { opacity: .35; pointer-events: none; }
 </style>
 
 <main>
@@ -130,11 +155,13 @@ $table = AdminTable::make(
 <div class="page-header flex">
         <div>
             <h2>Игроки</h2>
-            <p>Учётные записи форума, роли и ограничения.</p>
+            <p>Учётные записи форума, роли доступа и история ограничений.</p>
         </div>
-        <?php if ($canCreate): ?>
-            <a href="<?= url('/moderation/players/create') ?>" class="btn btn-primary">＋ Создать</a>
-        <?php endif; ?>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <?php if ($canCreate): ?>
+                <a href="<?= url('/moderation/players/create') ?>" class="btn btn-primary">＋ Создать</a>
+            <?php endif; ?>
+        </div>
     </div>
 
     <?= $table->filters() ?>
@@ -149,52 +176,59 @@ $table = AdminTable::make(
         </div>
 
         <aside class="logs-table-card player-card" style="padding:16px;">
+            <h3 style="margin:0 0 12px;font-size:18px;font-weight:700;">Карточка игрока</h3>
             <?php if (!$selected): ?>
-                <p class="text-muted">Выберите игрока в таблице</p>
+                <p class="text-muted" style="margin:0;">Выберите игрока в таблице</p>
             <?php else:
                 $s = $selected;
 
-                // Иерархия: считаем здесь (не зависим от контроллера)
-                $actorId = (int)($auth::user()['id'] ?? 0);
+                $actorId = (int)(\App\Services\AuthService::user()['id'] ?? 0);
                 $targetId = (int)($s['id'] ?? 0);
                 $isSelf = $actorId > 0 && $actorId === $targetId;
 
                 $rank = (new \App\Services\RoleHierarchyService())->canActOnUser($actorId, $targetId);
-                // Наказания / деактивация — только ниже по иерархии (не на себя)
                 $act = !$isSelf && !empty($rank['ok']);
-                // Свой профиль можно редактировать; чужой — по иерархии
                 $canEditTarget = $isSelf || !empty($rank['ok']);
-                $canActOnSelected = $act;
 
-                $canDeactivate = $canDeactivate && $act;
-                $canBan        = $canBan && $act;
-                $canMute       = $canMute && $act;
-                $canRestrict   = $canRestrict && $act;
-                $canEdit       = $canEdit && $canEditTarget;
-                // роль себе не повышаем через эту форму (только чужим ниже)
-                $canEditRole   = $canEditRole && $act;
-                $canPunish     = $canBan || $canMute || $canRestrict;
+                $canDeactivateThis = $canDeactivate && $act;
+                $canBanThis        = $canBan && $act;
+                $canMuteThis       = $canMute && $act;
+                $canRestrictThis   = $canRestrict && $act;
+                $canEditThis       = $canEdit && $canEditTarget;
+                $canEditRoleThis   = $canEditRole && $act;
+                $canPunish         = $canBanThis || $canMuteThis || $canRestrictThis;
                 $roleLabel = $roleModel->label($s['role_name'] ?? '');
+                $roleKey = strtoupper((string)($s['role_name'] ?? 'user'));
+                $threadsCount = (int)($s['threads_count'] ?? 0);
+                $postsCount = (int)($s['posts_count'] ?? 0);
             ?>
-                <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+                <div style="display:flex;gap:12px;align-items:center;margin-bottom:4px;">
                     <?php
-                    $letter = htmlspecialchars(mb_strtoupper(mb_substr($s['username'] ?? '?', 0, 1)));
-                    if (!empty($s['avatar'])): ?>
-                        <img class="player-av" src="<?= htmlspecialchars(url(ltrim($s['avatar'], '/'))) ?>" alt="">
+                    $cardName = (string)($s['username'] ?? '');
+                    $letter = htmlspecialchars(mb_strtoupper(mb_substr($cardName !== '' ? $cardName : '?', 0, 1)));
+                    $bustUrl = $cardName !== '' ? 'https://nmsr.nickac.dev/bust/' . rawurlencode($cardName) : '';
+                    if ($bustUrl !== ''): ?>
+                        <img class="player-av player-av--lg" src="<?= htmlspecialchars($bustUrl) ?>" alt="" loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+                        <span class="player-av player-av--ph player-av--lg" style="display:none"><?= $letter ?></span>
                     <?php else: ?>
-                        <span class="player-av player-av--ph"><?= $letter ?></span>
+                        <span class="player-av player-av--ph player-av--lg"><?= $letter ?></span>
                     <?php endif; ?>
                     <div>
-                        <strong><?= htmlspecialchars($s['username'] ?? '') ?></strong>
-                        <div class="text-muted" style="font-size:12px;">ID <?= (int)$s['id'] ?></div>
+                        <strong style="font-size:15px;"><?= htmlspecialchars($cardName) ?></strong>
+                        <div class="text-muted" style="font-size:12px;">
+                            ID F-<?= str_pad((string)(int)$s['id'], 3, '0', STR_PAD_LEFT) ?>
+                            <?= $isSelf ? ' · ваш аккаунт' : '· выбранный аккаунт' ?>
+                        </div>
+                        <span class="role-badge"><?= htmlspecialchars($roleKey) ?></span>
                     </div>
                 </div>
 
-                <div class="meta-row"><span>Роль</span><span><?= htmlspecialchars($roleLabel) ?></span></div>
-                <div class="meta-row"><span>Email</span><span><?= htmlspecialchars($s['email'] ?? '') ?></span></div>
-                <div class="meta-row"><span>Регистрация</span><span><?= htmlspecialchars($s['created_at'] ?? '') ?></span></div>
+                <div class="meta-row"><span>Доступ</span><span><?= htmlspecialchars($roleLabel) ?></span></div>
+                <div class="meta-row"><span>Email</span><span style="word-break:break-all;"><?= htmlspecialchars($s['email'] ?? '—') ?></span></div>
+                <div class="meta-row"><span>Регистрация</span><span><?= htmlspecialchars($s['created_at'] ?? '—') ?></span></div>
                 <div class="meta-row"><span>Последний вход</span><span><?= htmlspecialchars($s['last_seen'] ?? '—') ?></span></div>
-                <div class="meta-row"><span>Посты</span><span><?= (int)($s['posts_count'] ?? 0) ?></span></div>
+                <div class="meta-row"><span>Темы / ответы</span><span><?= $threadsCount ?> / <?= $postsCount ?></span></div>
                 <div class="meta-row">
                     <span>Санкции</span>
                     <span><?= !empty($s['is_banned']) ? 'Бан' : (empty($s['sanctions']) ? 'Нет активных' : count($s['sanctions'])) ?></span>
@@ -221,26 +255,29 @@ $table = AdminTable::make(
                     <?php endforeach; ?>
                 <?php endif; ?>
 
-                <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
-                    <?php if ($canEdit || $canEditRole): ?>
-                        <?php if ($canEdit): ?><a class="btn btn-outline" href="<?= url('/moderation/players/edit/' . (int)$s['id']) ?>">Изменить</a><?php endif; ?>
+                <div class="card-actions">
+                    <?php if ($canEditThis || $canEditRoleThis): ?>
+                        <a class="btn btn-outline" href="<?= url('/moderation/players/edit/' . (int)$s['id']) ?>">
+                            <?= $canEditRoleThis ? 'Изменить роль / профиль' : 'Изменить профиль' ?>
+                        </a>
                     <?php endif; ?>
 
                     <?php if ($isSelf): ?>
-                    <p class="text-muted" style="font-size:13px;margin:10px 0;">Это ваш аккаунт. Можно изменить профиль; наказывать или деактивировать себя нельзя.</p>
-                <?php elseif (!$act && $selected): ?>
-                    <p class="text-muted" style="font-size:13px;margin:10px 0;">Нельзя менять этого игрока: роль равна вашей или выше.</p>
-                <?php endif; ?>
-                <?php if ($canDeactivate): ?>
+                        <p class="card-note">Это ваш аккаунт. Можно править профиль; наказывать или деактивировать себя нельзя.</p>
+                    <?php elseif (!$act): ?>
+                        <p class="card-note">Нельзя менять этого игрока: роль равна вашей или выше.</p>
+                    <?php endif; ?>
+
+                    <?php if ($canDeactivateThis): ?>
                         <?php $isActive = !isset($s['is_active']) || (int)$s['is_active'] === 1; ?>
                         <form method="post" action="<?= url('/moderation/players/deactivate/' . (int)$s['id']) ?>">
                             <?php if ($isActive): ?>
                                 <input type="hidden" name="active" value="0">
-                                <button type="submit" class="btn btn-outline btn-danger" style="width:100%;"
+                                <button type="submit" class="btn btn-outline btn-danger"
                                         onclick="return confirm('Деактивировать аккаунт? Войти будет нельзя.')">Деактивировать</button>
                             <?php else: ?>
                                 <input type="hidden" name="active" value="1">
-                                <button type="submit" class="btn btn-outline" style="width:100%;"
+                                <button type="submit" class="btn btn-outline"
                                         onclick="return confirm('Снова активировать аккаунт?')">Активировать</button>
                             <?php endif; ?>
                         </form>
@@ -248,14 +285,14 @@ $table = AdminTable::make(
 
                     <?php if ($canPunish): ?>
                         <details>
-                            <summary class="btn btn-outline" style="cursor:pointer;">Выдать наказание</summary>
+                            <summary class="btn btn-outline" style="cursor:pointer;list-style:none;">Выдать наказание</summary>
                             <form method="post" action="<?= url('/moderation/players/punish/' . (int)$s['id']) ?>" style="margin-top:10px;">
                                 <div class="form-group">
                                     <label>Тип</label>
                                     <select name="type">
-                                        <?php if ($canBan): ?><option value="ban">Бан</option><?php endif; ?>
-                                        <?php if ($canMute): ?><option value="mute">Мут</option><?php endif; ?>
-                                        <?php if ($canRestrict): ?><option value="restrict">Ограничение</option><?php endif; ?>
+                                        <?php if ($canBanThis): ?><option value="ban">Бан</option><?php endif; ?>
+                                        <?php if ($canMuteThis): ?><option value="mute">Мут</option><?php endif; ?>
+                                        <?php if ($canRestrictThis): ?><option value="restrict">Ограничение</option><?php endif; ?>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -263,7 +300,7 @@ $table = AdminTable::make(
                                     <input type="text" name="reason" required placeholder="Причина">
                                 </div>
                                 <div class="form-group">
-                                    <label>До (необяз.)</label>
+                                    <label>До (необязательно)</label>
                                     <input type="datetime-local" name="expires_at">
                                 </div>
                                 <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;"
@@ -271,6 +308,8 @@ $table = AdminTable::make(
                             </form>
                         </details>
                     <?php endif; ?>
+
+                    <p class="card-note">Ограничения форума не меняют доступ к игровому серверу.</p>
                 </div>
             <?php endif; ?>
         </aside>

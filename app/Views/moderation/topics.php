@@ -10,15 +10,15 @@ $page = (int)($page ?? 1);
 $pages = (int)($pages ?? 1);
 $categoryOptions = $categoryOptions ?? [];
 
-$canManage = AuthService::hasRole('admin')
-    || AuthService::can('threads.view_mod')
-    || AuthService::can('lock_thread');
-$canPin = AuthService::can('threads.pin') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
-$canLock = AuthService::can('threads.lock') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
-$canMove = AuthService::can('threads.move') || AuthService::can('move_thread') || AuthService::hasRole('admin');
-$canHide = AuthService::can('threads.hide') || AuthService::can('delete_thread') || AuthService::hasRole('admin');
-$canEdit = AuthService::can('threads.edit_any') || AuthService::hasRole('admin');
-$canModerate = AuthService::can('threads.moderate') || AuthService::can('lock_thread') || AuthService::hasRole('admin');
+// can() уже учитывает isAdmin(). Legacy-ключи — только запасной вариант, без «лишних» наследований.
+$canPin      = AuthService::can('threads.pin');
+$canLock     = AuthService::can('threads.lock') || AuthService::can('lock_thread');
+$canMove     = AuthService::can('threads.move') || AuthService::can('move_thread');
+$canHide     = AuthService::can('threads.hide') || AuthService::can('delete_thread');
+$canEdit     = AuthService::can('threads.edit_any');
+$canModerate = AuthService::can('threads.moderate');
+// Блок действий — только если есть хотя бы одно разрешённое действие
+$canManage = $canPin || $canLock || $canMove || $canHide || $canEdit || $canModerate;
 
 $columns = [
     [
@@ -38,7 +38,14 @@ $columns = [
     [
         'key'    => 'category_title',
         'label'  => 'Раздел',
-        'render' => fn(array $row): string => htmlspecialchars($row['category_title'] ?? '—'),
+        'render' => function (array $row): string {
+            $section = $row['category_title'] ?? '';
+            $parent  = $row['parent_category_title'] ?? '';
+            if ($parent !== '' && $section !== '') {
+                return htmlspecialchars($parent . ' → ' . $section);
+            }
+            return htmlspecialchars($section !== '' ? $section : '—');
+        },
     ],
     [
         'key'    => 'author_name',
@@ -181,7 +188,11 @@ $table = AdminTable::make(
                     T-<?= str_pad((string)$tid, 3, '0', STR_PAD_LEFT) ?> · <?= htmlspecialchars($s['slug'] ?? '') ?>
                 </div>
 
-                <div class="meta-row"><span>Раздел</span><span><?= htmlspecialchars($s['category_title'] ?? '') ?></span></div>
+                <div class="meta-row"><span>Раздел</span><span><?php
+                    $sec = $s['category_title'] ?? '';
+                    $par = $s['parent_category_title'] ?? '';
+                    echo htmlspecialchars(($par !== '' && $sec !== '') ? ($par . ' → ' . $sec) : ($sec !== '' ? $sec : '—'));
+                ?></span></div>
                 <div class="meta-row"><span>Автор</span><span><?= htmlspecialchars($s['author_name'] ?? '') ?></span></div>
                 <div class="meta-row"><span>Ответы</span><span><?= (int)($s['replies_count'] ?? 0) ?></span></div>
                 <div class="meta-row"><span>Просмотры</span><span><?= (int)($s['views'] ?? 0) ?></span></div>
@@ -190,8 +201,11 @@ $table = AdminTable::make(
 
                 <?php if ($canManage): ?>
                 <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
-                    <?php if ($canEdit): ?><a class="btn btn-outline" href="<?= url('/moderation/topics/edit/' . $tid) ?>">Редактировать</a><?php endif; ?>
+                    <?php if ($canEdit): ?>
+                        <a class="btn btn-outline" href="<?= url('/moderation/topics/edit/' . $tid) ?>">Редактировать</a>
+                    <?php endif; ?>
 
+                    <?php if ($canPin): ?>
                     <form method="post" action="<?= url('/moderation/topics/sticky/' . $tid) ?>">
                         <?php if (empty($s['is_sticky'])): ?>
                             <input type="hidden" name="sticky" value="1">
@@ -201,7 +215,9 @@ $table = AdminTable::make(
                             <button type="submit" class="btn btn-outline" style="width:100%;">Открепить</button>
                         <?php endif; ?>
                     </form>
+                    <?php endif; ?>
 
+                    <?php if ($canLock): ?>
                     <form method="post" action="<?= url('/moderation/topics/lock/' . $tid) ?>">
                         <?php if (empty($s['is_locked'])): ?>
                             <input type="hidden" name="locked" value="1">
@@ -211,11 +227,17 @@ $table = AdminTable::make(
                             <button type="submit" class="btn btn-outline" style="width:100%;">Открыть</button>
                         <?php endif; ?>
                     </form>
+                    <?php endif; ?>
 
+                    <?php if ($canMove): ?>
                     <form method="post" action="<?= url('/moderation/topics/move/' . $tid) ?>">
                         <label class="text-muted" style="font-size:12px;">Перенести в раздел</label>
                         <select name="category_id" style="width:100%;margin:6px 0;">
-                            <?php foreach ($categoryOptions as $cid => $ctitle): ?>
+                            <?php
+                            $sectionOptions = $sectionOptions ?? [];
+                            $moveOptions = $sectionOptions ?: $categoryOptions;
+                            foreach ($moveOptions as $cid => $ctitle):
+                            ?>
                                 <option value="<?= (int)$cid ?>" <?= (int)($s['category_id'] ?? 0) === (int)$cid ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($ctitle) ?>
                                 </option>
@@ -223,21 +245,26 @@ $table = AdminTable::make(
                         </select>
                         <button type="submit" class="btn btn-outline" style="width:100%;">Перенести</button>
                     </form>
+                    <?php endif; ?>
 
+                    <?php if ($canHide): ?>
                     <form method="post" action="<?= url('/moderation/topics/hide/' . $tid) ?>"
                           onsubmit="return confirm('Скрыть тему из публичного списка?');">
-                        <input type="hidden" name="hidden" value="1">
-                        <button type="submit" class="btn btn-outline btn-danger" style="width:100%;">Скрыть</button>
+                        <input type="hidden" name="hidden" value="<?= empty($s['is_hidden']) ? '1' : '0' ?>">
+                        <button type="submit" class="btn btn-outline <?= empty($s['is_hidden']) ? 'btn-danger' : '' ?>" style="width:100%;">
+                            <?= empty($s['is_hidden']) ? 'Скрыть' : 'Показать' ?>
+                        </button>
                     </form>
+                    <?php endif; ?>
 
                     <?php if ($canModerate && ($s['status'] ?? '') === 'pending'): ?>
                         <form method="post" action="<?= url('/moderation/topics/moderate/' . $tid) ?>">
                             <input type="hidden" name="status" value="published">
-                            <button type="submit" class="btn btn-primary" style="width:100%;">Одобрить</button>
+                            <button type="submit" class="btn btn-success" style="width:100%;">Одобрить</button>
                         </form>
                         <form method="post" action="<?= url('/moderation/topics/moderate/' . $tid) ?>">
                             <input type="hidden" name="status" value="rejected">
-                            <button type="submit" class="btn btn-outline" style="width:100%;"
+                            <button type="submit" class="btn btn-danger" style="width:100%;"
                                     onclick="return confirm('Отклонить тему?');">Отклонить</button>
                         </form>
                     <?php endif; ?>
