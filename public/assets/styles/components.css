@@ -1,0 +1,46 @@
+.btn {
+
+}
+
+/* =====================================
+    BUTTON COLORS VARIANTS
+===================================== */
+.btn-outline {
+    
+}
+
+.btn-success {
+    background: var(--success-bg);
+    color: var(--success);
+    transition: all 0.25s ease-in-out;
+}
+
+.btn-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+    transition: all 0.25s ease-in-out;
+}
+
+.btn-danger:hover {
+    background: var(--danger-alt);
+    color: #fff;
+}
+
+/* =====================================
+    BUTTON SIZES VARIANTS
+===================================== */
+.btn-sm {
+
+}
+
+.btn-m {
+
+}
+
+.btn-l {
+
+}
+
+.btn-w {
+
+}

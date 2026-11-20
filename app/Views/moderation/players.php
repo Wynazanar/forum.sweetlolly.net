@@ -141,7 +141,14 @@ $table = AdminTable::make(
 .player-card .card-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .player-card .card-actions .btn { width: 100%; text-align: center; }
 .player-card .card-note { font-size: 12px; color: var(--muted,#999); margin: 10px 0 0; line-height: 1.4; }
-.sanction-item { font-size: 13px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,.12); margin-bottom: 6px; }
+.sanction-item {
+    font-size: 13px;
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--table-header);
+    color: var(--muted);
+    margin-bottom: 6px;
+}
 .pagination-ellipsis { padding: 0 6px; opacity: .5; user-select: none; }
 .pagination-nav { min-width: 28px; text-align: center; }
 .pagination-nav.is-disabled { opacity: .35; pointer-events: none; }
@@ -159,7 +166,7 @@ $table = AdminTable::make(
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <?php if ($canCreate): ?>
-                <a href="<?= url('/moderation/players/create') ?>" class="btn btn-primary">＋ Создать</a>
+                <a href="<?= url('/moderation/players/create') ?>" class="btn btn-primary">＋ Создать аккаунт</a>
             <?php endif; ?>
         </div>
     </div>
@@ -201,6 +208,9 @@ $table = AdminTable::make(
                 $roleKey = strtoupper((string)($s['role_name'] ?? 'user'));
                 $threadsCount = (int)($s['threads_count'] ?? 0);
                 $postsCount = (int)($s['posts_count'] ?? 0);
+
+                // var_dump($s);
+
             ?>
                 <div style="display:flex;gap:12px;align-items:center;margin-bottom:4px;">
                     <?php
@@ -235,17 +245,20 @@ $table = AdminTable::make(
                 </div>
 
                 <?php if (!empty($s['sanctions'])): ?>
-                    <h4 style="margin:14px 0 8px;font-size:13px;">Активные ограничения</h4>
+                    <h4 style="color:var(--muted);font-size:13px;">Активные наказания</h4>
+                    <div>
                     <?php foreach ($s['sanctions'] as $san): ?>
-                        <div class="sanction-item">
-                            <strong><?= htmlspecialchars($san['type'] ?? 'ban') ?></strong>
-                            — <?= htmlspecialchars($san['reason'] ?? '') ?>
-                            <div class="text-muted" style="font-size:11px;">
-                                до <?= htmlspecialchars($san['expires_at'] ?? 'бессрочно') ?>
-                                · <?= htmlspecialchars($san['banned_by_name'] ?? '—') ?>
+                        <div class="sanction-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong><?= htmlspecialchars($san['type'] ?? 'ban') ?></strong>
+                                — <?= htmlspecialchars($san['reason'] ?? '') ?>
+                                <div class="text-muted" style="font-size:11px;">
+                                    до <?= htmlspecialchars($san['expires_at'] ?? 'бессрочно') ?>
+                                    · <?= htmlspecialchars($san['banned_by_name'] ?? '—') ?>
+                                </div>
                             </div>
                             <?php if ($canPunish): ?>
-                            <form method="post" action="<?= url('/moderation/players/revoke/' . (int)$s['id']) ?>" style="margin-top:6px;">
+                            <form method="post" action="<?= url('/moderation/players/revoke/' . (int)$s['id']) ?>">
                                 <input type="hidden" name="type" value="<?= htmlspecialchars($san['type'] ?? 'ban') ?>">
                                 <button type="submit" class="btn btn-outline btn-sm"
                                         onclick="return confirm('Снять ограничение?')">Снять</button>
@@ -253,7 +266,27 @@ $table = AdminTable::make(
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
+
+                <?php if (!empty($s['sanction_history'])): ?>
+                    <details class="users-accordion">
+                        <summary>История наказаний</summary>
+                        <?php foreach ($s['sanction_history'] as $san): ?>
+                            <div class="sanction-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong><?= htmlspecialchars($san['type'] ?? 'ban') ?></strong>
+                                — <?= htmlspecialchars($san['reason'] ?? '') ?>
+                                <div class="text-muted" style="font-size:11px;">
+                                    до <?= htmlspecialchars($san['expires_at'] ?? 'бессрочно') ?>
+                                    · <?= htmlspecialchars($san['banned_by_name'] ?? '—') ?>
+                                </div>
+                            </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
+                <?php endif; ?>
+
 
                 <div class="card-actions">
                     <?php if ($canEditThis || $canEditRoleThis): ?>
@@ -263,7 +296,7 @@ $table = AdminTable::make(
                     <?php endif; ?>
 
                     <?php if ($isSelf): ?>
-                        <p class="card-note">Это ваш аккаунт. Можно править профиль; наказывать или деактивировать себя нельзя.</p>
+                        <p class="card-note detail-note">Это ваш аккаунт. Можно изменять профиль; наказывать или деактивировать себя нельзя.</p>
                     <?php elseif (!$act): ?>
                         <p class="card-note">Нельзя менять этого игрока: роль равна вашей или выше.</p>
                     <?php endif; ?>
@@ -277,7 +310,7 @@ $table = AdminTable::make(
                                         onclick="return confirm('Деактивировать аккаунт? Войти будет нельзя.')">Деактивировать</button>
                             <?php else: ?>
                                 <input type="hidden" name="active" value="1">
-                                <button type="submit" class="btn btn-outline"
+                                <button type="submit" class="btn btn-outline btn-success"
                                         onclick="return confirm('Снова активировать аккаунт?')">Активировать</button>
                             <?php endif; ?>
                         </form>

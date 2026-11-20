@@ -6,6 +6,19 @@
 
 body {
     background: var(--body-background);
+    position: relative;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url('/forum.sweetlolly.net/public/assets/resources/admin.webp');
+    background-position: center;
+    background-repeat: repeat;
+    opacity: 0.45;
+    pointer-events: none;
+    z-index: -1;
 }
 
 .logs-filters {
@@ -562,6 +575,11 @@ html.dark .change-after,
     background: var(--surface);
 }
 
+.btn.btn-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
 /* Примечание внизу */
 .log-detail-note {
     margin: 12px 0 0;
@@ -859,6 +877,37 @@ html.dark .log-role-admin,
     gap: 8px;
 }
 
+
+.users-accordion {
+    transition: all 0.5s ease-in-out;
+}
+
+.users-accordion summary {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    user-select: none;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.users-accordion summary::-webkit-details-marker {
+    display: none;
+}
+
+.users-accordion summary::after {
+    content: '+';
+    font-size: 20px;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.users-accordion[open] summary::after {
+    content: '−';
+}
 
 
 

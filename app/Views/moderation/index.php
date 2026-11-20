@@ -65,6 +65,7 @@ unset($tab);
 ?>
 
 <link rel="stylesheet" href="<?= asset('styles/admin.css') ?>">
+<link rel="stylesheet" href="<?= asset('styles/components.css') ?>">
 
 <?= \App\Components\Tabs::make($tabs, $currentTab) ?>
 

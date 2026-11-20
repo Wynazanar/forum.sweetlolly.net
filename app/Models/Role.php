@@ -135,6 +135,8 @@ class Role extends Model
             'admin'      => 'Администратор',
             'helper'     => 'Хелпер',
             'curator'    => 'Куратор',
+            'moder'    =>   'Модератор',
+            'gmoder'    =>   'Гл. модер',
             default      => mb_convert_case(str_replace(['_', '-'], ' ', $name), MB_CASE_TITLE, 'UTF-8'),
         };
     }

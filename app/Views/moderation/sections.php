@@ -304,7 +304,7 @@ $canManageSections = AuthService::can('manage_categories');
                             action="<?= url('/moderation/sections/delete/' . (int)$selected['id']) ?>"
                             onsubmit="return confirm('Удалить этот раздел? Это действие нельзя отменить.');"
                             style="display: inline;">
-                            <button type="submit" class="btn btn-outline btn-danger">
+                            <button type="submit" class="btn btn-danger">
                                 Удалить
                             </button>
                         </form>
