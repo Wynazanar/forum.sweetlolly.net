@@ -9,6 +9,13 @@ body {
     position: relative;
 }
 
+body.dark {
+    --table-header: #322842;       /* как --surface-2, чуть светлее карточки */
+    --table-border: #3d334f;       /* мягкая фиолетовая граница */
+    --body-background: #1e152c;    /* тон страницы из --bg-page */
+}
+
+
 body::before {
     content: "";
     position: fixed;
@@ -19,6 +26,10 @@ body::before {
     opacity: 0.45;
     pointer-events: none;
     z-index: -1;
+}
+
+body.dark::before {
+    opacity: 0.008;
 }
 
 .logs-filters {
@@ -107,6 +118,8 @@ input {
 
 .logs-table tbody tr.is-active {
     background: var(--pill-bg-strong);
+    border-color: var(--accent-deep);
+    border-left: 3px solid var(--accent-deep);
 }
 
 .logs-table tbody td {
@@ -1382,3 +1395,27 @@ html.dark .log-role-admin,
 .disc-punish-form input[type=text],.disc-punish-form input[type=datetime-local],.disc-punish-form select{width:100%;max-width:none;height:34px;padding:6px 8px;border:1px solid #e8dfe5;border-radius:7px;background:#fff;color:#554958;font:inherit;font-size:11px}
 .disc-punish-form .disc-punish-reject{display:flex;flex-direction:row;align-items:center;gap:7px;font-weight:500}
 .disc-punish-form .disc-punish-reject input{width:auto;height:auto}
+
+
+
+
+.sub-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    align-items: center;
+}
+
+.sub-tab {
+    padding: 10px 14px;
+    background: var(--surface);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.sub-tab.active {
+    background: var(--pill-bg-strong);
+    color: var(--accent-deep);
+    font-weight: 500;
+}

@@ -122,6 +122,49 @@ class AuthService
     }
 
     /**
+     * Права, которые открывают хотя бы один раздел модерации.
+     * Единый список для Header, guard и редиректов.
+     */
+    public static function moderationPermissions(): array
+    {
+        return [
+            // вкладки
+            'players.view',
+            'manage_roles',
+            'resolve_report',
+            'applications.view',
+            'manage_categories',
+            'threads.view_mod',
+            'discussions.view_mod',
+            'view_logs',
+            // legacy-ключи, которые всё ещё дают доступ к табам
+            'lock_thread',
+            'move_thread',
+            'delete_thread',
+            'ban_user',
+        ];
+    }
+
+    /**
+     * Есть ли доступ в админ-панель (хотя бы просмотр одного раздела).
+     */
+    public static function canAccessModeration(): bool
+    {
+        if (!self::check()) {
+            return false;
+        }
+        if (self::isAdmin()) {
+            return true;
+        }
+        foreach (self::moderationPermissions() as $perm) {
+            if (self::can($perm)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Проверка роли (точное совпадение или админ-синоним)
      */
     public static function hasRole(string $roleName): bool

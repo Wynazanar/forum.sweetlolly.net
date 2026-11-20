@@ -208,7 +208,7 @@ try {
         target_id       BIGINT UNSIGNED NOT NULL,
         reason          VARCHAR(255) NOT NULL,
         description     TEXT NULL,
-        status          ENUM('pending', 'resolved', 'rejected') NOT NULL DEFAULT 'pending',
+        status          ENUM('pending','needs_info','resolved','rejected') NOT NULL DEFAULT 'pending',
         resolved_by     BIGINT UNSIGNED NULL,
         resolved_at     TIMESTAMP NULL,
         created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -217,6 +217,19 @@ try {
         INDEX (status, created_at),
         INDEX (target_type, target_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    $sql[] = "CREATE TABLE IF NOT EXISTS report_messages (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        report_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        body TEXT NOT NULL,
+        is_internal TINYINT(1) NOT NULL DEFAULT 0,
+        kind VARCHAR(32) NOT NULL DEFAULT 'message',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX (report_id, created_at),
+        FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
     $sql[] = "CREATE TABLE IF NOT EXISTS bans (
         id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

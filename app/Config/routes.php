@@ -25,6 +25,12 @@ return [
     new Route('/my/applications/:id/reply',          'application', 'myReply'),
     new Route('/my/applications/:id/withdraw',       'application', 'myWithdraw'),
 
+    // Мои репорты (личный кабинет)
+    new Route('/my/reports',              'report', 'myList'),
+    new Route('/my/reports/:id',          'report', 'myShow'),
+    new Route('/my/reports/:id/reply',    'report', 'myReply'),
+
+
 
 
 
@@ -81,6 +87,14 @@ return [
     new Route('/moderation/discussions/punish-post/:id', 'discussion', 'punishPostAuthor'),
     new Route('/moderation/discussions/thread/:action/:id', 'discussion', 'threadAction'),
     new Route('/moderation/discussions/report/:id', 'discussion', 'resolveReport'),
+
+    // Репорты — действия из панели модерации
+    new Route('/moderation/reports/resolve/:id',      'report', 'resolve'),
+    new Route('/moderation/reports/reject/:id',       'report', 'reject'),
+    new Route('/moderation/reports/request-info/:id', 'report', 'requestInfo'),
+    new Route('/moderation/reports/reply/:id',        'report', 'reply'),
+    new Route('/moderation/reports/reopen/:id',       'report', 'reopen'),
+
 
     // Sections
     new Route('/moderation/sections/create',     'section', 'create'),

@@ -19,7 +19,7 @@ class ModerationController extends Controller
             $this->deny();
         }
 
-        if (!AuthService::can('resolve_report') && !AuthService::can('applications.view') && !AuthService::can('manage_roles') && !AuthService::can('lock_thread') && !AuthService::can('players.view') && !AuthService::can('discussions.view_mod') && !AuthService::hasRole('admin')) {
+        if (!AuthService::canAccessModeration()) {
             $this->deny();
         }
 

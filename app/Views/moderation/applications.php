@@ -51,16 +51,16 @@ $selected       = $selected ?? null;
             </div>
         </div>
 
-        <div class="sub-tabs" style="display:flex;gap:4px;margin-bottom:16px;">
+        <div class="sub-tabs">
             <a href="<?= url('/moderation/applications') . '?sub=submissions' ?>"
-               class="btn <?= $appTab === 'submissions' ? 'btn-primary' : 'btn-outline' ?>">
+               class="btn <?= $appTab === 'submissions' ? 'sub-tab active' : 'sub-tab' ?>">
                 Поступившие
                 <?php if (($counts['pending'] ?? 0) > 0): ?>
                     <span class="badge badge-warning" style="margin-left:6px;"><?= (int)$counts['pending'] ?></span>
                 <?php endif; ?>
             </a>
             <a href="<?= url('/moderation/applications') . '?sub=forms' ?>"
-               class="btn <?= $appTab === 'forms' ? 'btn-primary' : 'btn-outline' ?>">
+               class="btn <?= $appTab === 'forms' ? 'sub-tab active' : 'sub-tab' ?>">
                 Шаблоны
             </a>
         </div>

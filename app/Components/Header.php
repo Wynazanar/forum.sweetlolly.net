@@ -9,19 +9,22 @@ class Header
     public function render(): string
     {
         $user = AuthService::user();
-        $isAdminBtnVisible = false; 
-        if ($user != null) {
-            $nickname = $user['username'];
-            $roleModel = new Role();
-            $role = $roleModel->label($user['role_name']);
-            if (AuthService::can('resolve_report') || 
-                AuthService::can('applications.view') ||
-                AuthService::can('manage_roles') ||
-                AuthService::hasRole('admin')) {
-                $isAdminBtnVisible = true;
+        $loggedIn = $user !== null;
+
+        $nickname = '';
+        $role = 'Игрок';
+        $isAdminBtnVisible = false;
+
+        if ($loggedIn) {
+            $nickname = (string)($user['username'] ?? '');
+            try {
+                $role = (new Role())->label($user['role_name'] ?? '') ?: 'Игрок';
+            } catch (\Throwable $e) {
+                $role = (string)($user['role_name'] ?? 'Игрок');
             }
+            // Любое право, открывающее модерацию (в т.ч. только просмотр игроков/тем)
+            $isAdminBtnVisible = AuthService::canAccessModeration();
         }
-        $loggedIn = isset($user);
 
         ob_start();
         ?>
@@ -46,7 +49,7 @@ class Header
                         <div class="theme-toggle" data-theme-toggle></div>
 
                         <?php if ($isAdminBtnVisible): ?>
-                            <a href="<?= url('/moderation/') ?>">
+                            <a href="<?= url('/moderation/') ?>" title="Панель модерации" aria-label="Панель модерации">
                                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" >
                                     <path d="M5 3a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4M5 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4M5 17a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4m7.33 0a2 2 0 1 0 0 4 2 2 0 1 0 0-4"></path>
                                 </svg>
@@ -60,8 +63,8 @@ class Header
                             
                             <div class="user user-logged">
                                 <a class="user-logg-a"
-                                   href="<?= url('/profile/'.htmlspecialchars($nickname)) ?>">
-                                    <img src="https://nmsr.nickac.dev/bust/<?= htmlspecialchars($nickname) ?>"
+                                   href="<?= url('/profile/'.rawurlencode($nickname)) ?>">
+                                    <img src="https://nmsr.nickac.dev/bust/<?= rawurlencode($nickname) ?>"
                                          alt="avatar">
                                     <div>
                                         <h6><?= htmlspecialchars($nickname !== '' ? $nickname : 'Игрок') ?></h6>

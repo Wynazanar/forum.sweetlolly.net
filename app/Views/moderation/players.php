@@ -185,7 +185,7 @@ $table = AdminTable::make(
         <aside class="logs-table-card player-card" style="padding:16px;">
             <h3 style="margin:0 0 12px;font-size:18px;font-weight:700;">Карточка игрока</h3>
             <?php if (!$selected): ?>
-                <p class="text-muted" style="margin:0;">Выберите игрока в таблице</p>
+                <p class="text-muted detail-note" style="margin-top:-16px;font-size: 13px;">Нажмите на строку в таблице, чтобы открыть профиль, историю и доступные действия.<br><br>Все действия — в карточке</p>
             <?php else:
                 $s = $selected;
 
@@ -244,6 +244,24 @@ $table = AdminTable::make(
                     <span><?= !empty($s['is_banned']) ? 'Бан' : (empty($s['sanctions']) ? 'Нет активных' : count($s['sanctions'])) ?></span>
                 </div>
 
+                <?php if (!empty($s['sanction_history'])): ?>
+                    <details class="users-accordion">
+                        <summary>История наказаний</summary>
+                        <?php foreach ($s['sanction_history'] as $san): ?>
+                            <div class="sanction-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong><?= htmlspecialchars($san['type'] ?? 'ban') ?></strong>
+                                — <?= htmlspecialchars($san['reason'] ?? '') ?>
+                                <div class="text-muted" style="font-size:11px;">
+                                    до <?= htmlspecialchars($san['expires_at'] ?? 'бессрочно') ?>
+                                    · <?= htmlspecialchars($san['banned_by_name'] ?? '—') ?>
+                                </div>
+                            </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
+                <?php endif; ?>
+
                 <?php if (!empty($s['sanctions'])): ?>
                     <h4 style="color:var(--muted);font-size:13px;">Активные наказания</h4>
                     <div>
@@ -268,25 +286,6 @@ $table = AdminTable::make(
                     <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-
-                <?php if (!empty($s['sanction_history'])): ?>
-                    <details class="users-accordion">
-                        <summary>История наказаний</summary>
-                        <?php foreach ($s['sanction_history'] as $san): ?>
-                            <div class="sanction-item" style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <strong><?= htmlspecialchars($san['type'] ?? 'ban') ?></strong>
-                                — <?= htmlspecialchars($san['reason'] ?? '') ?>
-                                <div class="text-muted" style="font-size:11px;">
-                                    до <?= htmlspecialchars($san['expires_at'] ?? 'бессрочно') ?>
-                                    · <?= htmlspecialchars($san['banned_by_name'] ?? '—') ?>
-                                </div>
-                            </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </details>
-                <?php endif; ?>
-
 
                 <div class="card-actions">
                     <?php if ($canEditThis || $canEditRoleThis): ?>
@@ -342,7 +341,7 @@ $table = AdminTable::make(
                         </details>
                     <?php endif; ?>
 
-                    <p class="card-note">Ограничения форума не меняют доступ к игровому серверу.</p>
+                    <p class="card-note detail-note">Ограничения форума не меняют доступ к игровому серверу.</p>
                 </div>
             <?php endif; ?>
         </aside>
